@@ -113,9 +113,9 @@
 }
 
 .nav-link:hover {
-  background-color: rgba(23, 32, 25, 0.6);
+  background-color: var(--color-surface-elevated);
   color: var(--color-text-primary);
-  border-color: rgba(38, 53, 44, 0.4);
+  border-color: var(--border-subtle-hover);
 }
 
 .nav-link:focus-visible {

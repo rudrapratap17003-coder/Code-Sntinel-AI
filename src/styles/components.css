@@ -20,7 +20,8 @@
 }
 
 .card:hover {
-  border-color: rgba(38, 53, 44, 0.9);
+  border-color: rgba(0, 245, 160, 0.25);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
 }
 
 .card-elevated {
@@ -259,7 +260,7 @@
 }
 
 .data-table tbody tr:hover {
-  background-color: rgba(23, 32, 25, 0.6);
+  background-color: rgba(0, 245, 160, 0.03);
 }
 
 /* --- Form Inputs & Controls --- */
@@ -582,20 +583,52 @@
 
 .summary-cards-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: var(--space-md);
-}
-
-@media (max-width: 1024px) {
-  .summary-cards-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
 }
 
 @media (max-width: 640px) {
   .summary-cards-grid {
     grid-template-columns: 1fr;
   }
+}
+
+.severity-bar-track {
+  width: 100%;
+  height: 10px;
+  background-color: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  display: flex;
+  overflow: hidden;
+  margin: var(--space-sm) 0;
+}
+
+.severity-bar-segment {
+  height: 100%;
+  transition: width var(--transition-normal);
+}
+
+.severity-legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+  font-size: var(--text-xs);
+  margin-top: var(--space-xs);
+}
+
+.severity-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-muted);
+}
+
+.severity-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
 }
 
 .summary-stat-card {
@@ -611,7 +644,8 @@
 }
 
 .summary-stat-card:hover {
-  border-color: rgba(38, 53, 44, 0.9);
+  border-color: rgba(0, 245, 160, 0.3);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
 }
 
 .summary-stat-header {
@@ -856,7 +890,7 @@
 }
 
 .indicator-footer {
-  border-top: 1px solid rgba(38, 53, 44, 0.4);
+  border-top: 1px solid var(--color-border-subtle);
   padding-top: var(--space-sm);
   display: flex;
   align-items: center;
@@ -976,9 +1010,9 @@
 .skeleton-shimmer {
   background: linear-gradient(
     90deg,
-    rgba(23, 32, 25, 0.6) 0%,
-    rgba(38, 53, 44, 0.45) 50%,
-    rgba(23, 32, 25, 0.6) 100%
+    rgba(21, 31, 24, 0.6) 0%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(21, 31, 24, 0.6) 100%
   );
   background-size: 200% 100%;
   animation: shimmer 1.6s infinite ease-in-out;

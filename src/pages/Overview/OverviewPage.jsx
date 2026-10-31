@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Shield,
   GitBranch,
@@ -16,12 +16,22 @@ import {
   AlertTriangle,
   HelpCircle,
   FolderPlus,
+  Activity,
+  Layers,
+  GitCompare,
+  TrendingUp,
+  RotateCcw,
+  AlertCircle,
+  ExternalLink,
 } from 'lucide-react';
 import {
   Button,
   Badge,
   Table,
   EmptyState,
+  Card,
+  CardHeader,
+  CardBody,
 } from '../../ui';
 import { useAnalysis } from '../../context/AnalysisContext';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
@@ -37,6 +47,7 @@ import { FindingDetailModal } from '../../components/findings/FindingDetailModal
  */
 export function OverviewPage() {
   useDocumentTitle('Command Center — CodeSentinel AI');
+  const navigate = useNavigate();
   const {
     currentAnalysis,
     isDemoMode,
@@ -44,6 +55,8 @@ export function OverviewPage() {
     selectFinding,
     clearActiveFinding,
     loadDemoAnalysis,
+    historyRecords = [],
+    restoreAnalysis,
   } = useAnalysis();
 
   // Standard indicator descriptions mandated by Part 5 Section D
@@ -64,7 +77,7 @@ export function OverviewPage() {
   if (!currentAnalysis) {
     return (
       <div className="command-center-container">
-        {/* SECTION A: Page Header */}
+        {/* Header */}
         <header className="command-center-header">
           <div>
             <h1 className="command-center-title">
@@ -114,8 +127,8 @@ export function OverviewPage() {
   }
 
   const {
-    repository,
-    summary,
+    repository = {},
+    summary = {},
     indicators = [],
     priorityFindings = [],
     findings = [],
@@ -124,7 +137,12 @@ export function OverviewPage() {
 
   const criticalCount = findings.filter((f) => (f.severity || '').toLowerCase() === 'critical').length;
   const highCount = findings.filter((f) => (f.severity || '').toLowerCase() === 'high').length;
-  const hotspotsCount = hotspots.length;
+  const mediumCount = findings.filter((f) => (f.severity || '').toLowerCase() === 'medium').length;
+  const lowCount = findings.filter((f) => {
+    const s = (f.severity || '').toLowerCase();
+    return s === 'low' || s === 'info';
+  }).length;
+  const totalFindings = findings.length || repository?.findingsCount || 0;
 
   // CMDI score clamp & tier mapping
   const isScoreAvailable =
@@ -226,7 +244,7 @@ export function OverviewPage() {
   return (
     <div className="command-center-container">
       {/* -------------------------------------------------------------------- */}
-      {/* SECTION A: Page Header                                               */}
+      {/* SECTION A: Welcome Header                                            */}
       {/* -------------------------------------------------------------------- */}
       <header className="command-center-header">
         <div>
@@ -235,12 +253,11 @@ export function OverviewPage() {
             Command Center
           </h1>
           <p className="command-center-subtitle">
-            Understand code health, investigate technical debt, and prioritize engineering improvements.
+            Target repository: <strong>{repository.name || 'Codebase'}</strong> • Understand code health, investigate technical debt, and prioritize engineering improvements.
           </p>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', flexWrap: 'wrap' }}>
-          {/* Target Repository Branch context */}
           {repository?.branch && (
             <div
               style={{
@@ -268,7 +285,6 @@ export function OverviewPage() {
             </div>
           )}
 
-          {/* Environment / dataset badge */}
           {isDemoMode ? (
             <Badge variant="demo" title="Displayed metrics are demonstration heuristics and simulated analysis values.">
               <Sparkles size={11} />
@@ -284,97 +300,95 @@ export function OverviewPage() {
       </header>
 
       {/* -------------------------------------------------------------------- */}
-      {/* SECTION B: Repository Summary (4 Compact Cards)                      */}
+      {/* SECTION B: Key Metric Cards (5 Cards)                                */}
       {/* -------------------------------------------------------------------- */}
-      <section aria-label="Repository Summary Metrics">
+      <section aria-label="Key Metric Cards">
         <div className="summary-cards-grid">
-          {/* 1. Files Examined */}
+          {/* 1. CMDI Score */}
           <div className="summary-stat-card">
             <div className="summary-stat-header">
-              <span className="summary-stat-label">Files Examined</span>
-              <FileCode size={15} style={{ color: 'var(--text-secondary)' }} />
+              <span className="summary-stat-label">CMDI Score</span>
+              <Activity size={15} style={{ color: isScoreAvailable ? 'var(--color-accent-primary)' : 'var(--text-secondary)' }} />
             </div>
-            <div className="summary-stat-value">
-              {typeof repository.filesExamined === 'number'
-                ? `${repository.filesExamined.toLocaleString()} files`
-                : 'Not available'}
+            <div className="summary-stat-value" style={{ color: isScoreAvailable ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+              {isScoreAvailable ? clampedCmdi.toFixed(1) : 'Not Available'}
             </div>
             <div className="summary-stat-supporting">
-              {isDemoMode ? 'Demo files examined (sample)' : 'Source files analyzed'}
+              <Badge variant={summary.riskSeverity || (isScoreAvailable ? 'medium' : 'default')} style={{ fontSize: '10px' }}>
+                {summary.riskCategory || cmdiRiskTier}
+              </Badge>
             </div>
           </div>
 
-          {/* 2. Total Findings & Severity Breakdown */}
+          {/* 2. Total Findings */}
           <div className="summary-stat-card">
             <div className="summary-stat-header">
               <span className="summary-stat-label">Total Findings</span>
               <ShieldAlert size={15} style={{ color: 'var(--text-secondary)' }} />
             </div>
             <div className="summary-stat-value">
-              {typeof repository.findingsCount === 'number'
-                ? `${repository.findingsCount.toLocaleString()} issues`
-                : `${findings.length} issues`}
+              {totalFindings.toLocaleString()}
             </div>
-            <div className="summary-stat-supporting" style={{ flexWrap: 'wrap', gap: '6px' }}>
-              <span style={{ color: criticalCount > 0 ? 'var(--color-severity-critical)' : 'var(--color-accent-primary)', fontWeight: 'bold' }}>
-                {criticalCount} Critical
-              </span>
-              <span>•</span>
-              <span style={{ color: highCount > 0 ? 'var(--color-severity-medium)' : 'var(--text-secondary)' }}>
-                {highCount} High
-              </span>
-              {hotspotsCount > 0 && (
-                <>
-                  <span>•</span>
-                  <span style={{ color: 'var(--color-accent-primary)' }}>
-                    {hotspotsCount} Hotspots
-                  </span>
-                </>
-              )}
+            <div className="summary-stat-supporting">
+              <span>AST violations detected</span>
             </div>
           </div>
 
-          {/* 3. Estimated Remediation Effort */}
+          {/* 3. Critical Findings */}
           <div className="summary-stat-card">
             <div className="summary-stat-header">
-              <span className="summary-stat-label">Estimated Effort</span>
-              <Clock size={15} style={{ color: 'var(--text-secondary)' }} />
+              <span className="summary-stat-label">Critical Findings</span>
+              <AlertCircle size={15} style={{ color: criticalCount > 0 ? 'var(--color-severity-critical)' : 'var(--text-secondary)' }} />
+            </div>
+            <div className="summary-stat-value" style={{ color: criticalCount > 0 ? 'var(--color-severity-critical)' : 'var(--color-accent-primary)' }}>
+              {criticalCount}
+            </div>
+            <div className="summary-stat-supporting">
+              <span>{criticalCount > 0 ? 'Immediate action required' : 'No critical issues'}</span>
+            </div>
+          </div>
+
+          {/* 4. High-Priority Findings */}
+          <div className="summary-stat-card">
+            <div className="summary-stat-header">
+              <span className="summary-stat-label">High Priority</span>
+              <Flame size={15} style={{ color: highCount > 0 ? 'var(--color-severity-medium)' : 'var(--text-secondary)' }} />
+            </div>
+            <div className="summary-stat-value" style={{ color: highCount > 0 ? 'var(--color-severity-medium)' : 'var(--text-primary)' }}>
+              {highCount}
+            </div>
+            <div className="summary-stat-supporting">
+              <span>High-blast-radius debt</span>
+            </div>
+          </div>
+
+          {/* 5. Analyzed Files */}
+          <div className="summary-stat-card">
+            <div className="summary-stat-header">
+              <span className="summary-stat-label">Analyzed Files</span>
+              <FileCode size={15} style={{ color: 'var(--text-secondary)' }} />
             </div>
             <div className="summary-stat-value">
-              {summary.remediationEstimateHours
-                ? `${summary.remediationEstimateHours} hrs`
+              {typeof repository.filesExamined === 'number'
+                ? repository.filesExamined.toLocaleString()
                 : 'Not available'}
             </div>
             <div className="summary-stat-supporting">
-              {isDemoMode ? 'Illustrative remediation estimate' : 'Projected remediation time'}
-            </div>
-          </div>
-
-          {/* 4. Last Analysis */}
-          <div className="summary-stat-card">
-            <div className="summary-stat-header">
-              <span className="summary-stat-label">Last Analysis</span>
-              <Calendar size={15} style={{ color: 'var(--text-secondary)' }} />
-            </div>
-            <div className="summary-stat-value" style={{ fontSize: '1.05rem', paddingTop: '4px' }}>
-              {repository.displayTimestamp || 'Not available'}
-            </div>
-            <div className="summary-stat-supporting">
-              {isDemoMode ? 'Demo dataset timestamp (no scan run)' : 'Static analysis timestamp'}
+              <span>Python source modules</span>
             </div>
           </div>
         </div>
       </section>
 
       {/* -------------------------------------------------------------------- */}
-      {/* SECTION C: CMDI Score (Code Maintainability Debt Index)              */}
+      {/* SECTION C: CMDI Score Visualization                                  */}
       {/* -------------------------------------------------------------------- */}
       <section aria-labelledby="cmdi-section-heading">
         <div
           className="cmdi-card"
           style={{ borderLeftColor: cmdiBorderColor }}
         >
-          {/* Header Row: Standardized Title, Badges, and Action Button */}
+          {/* Header Row */}
           <div className="cmdi-header-row">
             <div className="cmdi-title-group">
               <h2
@@ -410,7 +424,7 @@ export function OverviewPage() {
             </Button>
           </div>
 
-          {/* Main Row: Prominent Score + Illustrative Explanation */}
+          {/* Main Row */}
           <div className="cmdi-main-row">
             <div className="cmdi-score-block">
               <span className="cmdi-score-number">
@@ -437,7 +451,7 @@ export function OverviewPage() {
             </div>
           </div>
 
-          {/* Accessible Horizontal Meter */}
+          {/* Meter Bar */}
           <div
             className="cmdi-meter-track"
             role="meter"
@@ -474,7 +488,96 @@ export function OverviewPage() {
       </section>
 
       {/* -------------------------------------------------------------------- */}
-      {/* SECTION D: Core Code-Health Indicators (4 Cards)                     */}
+      {/* SECTION D: Technical Debt Overview & Severity Distribution           */}
+      {/* -------------------------------------------------------------------- */}
+      <section aria-labelledby="debt-overview-heading">
+        <Card>
+          <CardHeader
+            title="Technical Debt Overview"
+            subtitle={`Severity breakdown of ${totalFindings} detected maintainability findings across source modules.`}
+            action={
+              <Button
+                to={ROUTES.FINDINGS}
+                variant="ghost"
+                size="sm"
+                iconEnd={<ArrowRight size={13} />}
+              >
+                Inspect Ledger
+              </Button>
+            }
+          />
+          <CardBody>
+            {/* Visual stacked distribution bar */}
+            <div className="severity-bar-track" title={`Critical: ${criticalCount}, High: ${highCount}, Medium: ${mediumCount}, Low: ${lowCount}`}>
+              {criticalCount > 0 && (
+                <div
+                  className="severity-bar-segment"
+                  style={{
+                    width: `${(criticalCount / (totalFindings || 1)) * 100}%`,
+                    backgroundColor: 'var(--color-severity-critical)',
+                  }}
+                />
+              )}
+              {highCount > 0 && (
+                <div
+                  className="severity-bar-segment"
+                  style={{
+                    width: `${(highCount / (totalFindings || 1)) * 100}%`,
+                    backgroundColor: 'var(--color-severity-medium)',
+                  }}
+                />
+              )}
+              {mediumCount > 0 && (
+                <div
+                  className="severity-bar-segment"
+                  style={{
+                    width: `${(mediumCount / (totalFindings || 1)) * 100}%`,
+                    backgroundColor: '#F5B942',
+                  }}
+                />
+              )}
+              {lowCount > 0 && (
+                <div
+                  className="severity-bar-segment"
+                  style={{
+                    width: `${(lowCount / (totalFindings || 1)) * 100}%`,
+                    backgroundColor: 'var(--color-severity-info)',
+                  }}
+                />
+              )}
+              {totalFindings === 0 && (
+                <div
+                  className="severity-bar-segment"
+                  style={{ width: '100%', backgroundColor: 'var(--color-border)' }}
+                />
+              )}
+            </div>
+
+            {/* Severity Legend */}
+            <div className="severity-legend">
+              <div className="severity-legend-item">
+                <span className="severity-dot" style={{ backgroundColor: 'var(--color-severity-critical)' }} />
+                <span>Critical: <strong>{criticalCount}</strong></span>
+              </div>
+              <div className="severity-legend-item">
+                <span className="severity-dot" style={{ backgroundColor: 'var(--color-severity-medium)' }} />
+                <span>High: <strong>{highCount}</strong></span>
+              </div>
+              <div className="severity-legend-item">
+                <span className="severity-dot" style={{ backgroundColor: '#F5B942' }} />
+                <span>Medium: <strong>{mediumCount}</strong></span>
+              </div>
+              <div className="severity-legend-item">
+                <span className="severity-dot" style={{ backgroundColor: 'var(--color-severity-info)' }} />
+                <span>Low / Info: <strong>{lowCount}</strong></span>
+              </div>
+            </div>
+          </CardBody>
+        </Card>
+      </section>
+
+      {/* -------------------------------------------------------------------- */}
+      {/* SECTION E: Core Code-Health Indicators (4 Cards)                     */}
       {/* -------------------------------------------------------------------- */}
       <section aria-labelledby="indicators-section-heading">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-sm)' }}>
@@ -629,7 +732,146 @@ export function OverviewPage() {
       </section>
 
       {/* -------------------------------------------------------------------- */}
-      {/* SECTION E: Priority Findings                                         */}
+      {/* SECTION F: Top Hotspots Preview                                      */}
+      {/* -------------------------------------------------------------------- */}
+      {hotspots && hotspots.length > 0 && (
+        <section aria-labelledby="top-hotspots-heading">
+          <Card>
+            <CardHeader
+              title="Top Module Hotspots"
+              subtitle="Modules where cyclomatic complexity, incoming fan-in, and error risks intersect."
+              action={
+                <Button
+                  to={ROUTES.INSIGHTS}
+                  variant="ghost"
+                  size="sm"
+                  iconEnd={<ArrowRight size={13} />}
+                >
+                  View All Hotspots
+                </Button>
+              }
+            />
+            <CardBody style={{ padding: 0 }}>
+              <div className="findings-table-scroll">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Module Path</th>
+                      <th>Risk Classification</th>
+                      <th>Complexity</th>
+                      <th>Afferent Coupling</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {hotspots.slice(0, 4).map((h, idx) => (
+                      <tr key={h.module || h.module_name || idx}>
+                        <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', color: 'var(--text-primary)' }}>
+                          {h.module || h.module_name || 'module'}
+                        </td>
+                        <td>
+                          <Badge variant={h.risk === 'critical' || h.classification?.includes('Critical') ? 'critical' : 'medium'}>
+                            {h.classification || h.risk || 'Hotspot'}
+                          </Badge>
+                        </td>
+                        <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>
+                          v(G) = {h.complexity ?? h.highest_cyclomatic_complexity ?? 'N/A'}
+                        </td>
+                        <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>
+                          {h.coupling ?? h.afferent_coupling ?? 0} callers
+                        </td>
+                        <td>
+                          <Link
+                            to={ROUTES.INSIGHTS}
+                            style={{ color: 'var(--color-accent-primary)', fontSize: 'var(--text-xs)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                          >
+                            <span>Inspect</span>
+                            <ArrowRight size={11} />
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardBody>
+          </Card>
+        </section>
+      )}
+
+      {/* -------------------------------------------------------------------- */}
+      {/* SECTION G: Recent Analysis History                                   */}
+      {/* -------------------------------------------------------------------- */}
+      {historyRecords && historyRecords.length > 0 && (
+        <section aria-labelledby="recent-history-heading">
+          <Card>
+            <CardHeader
+              title="Recent Analysis History"
+              subtitle="Saved snapshots available for immediate inspection and comparison."
+              action={
+                <Button
+                  to={ROUTES.HISTORY}
+                  variant="ghost"
+                  size="sm"
+                  iconEnd={<ArrowRight size={13} />}
+                >
+                  Full History ({historyRecords.length})
+                </Button>
+              }
+            />
+            <CardBody style={{ padding: 0 }}>
+              <div className="findings-table-scroll">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Repository</th>
+                      <th>Analyzed At</th>
+                      <th>CMDI Score</th>
+                      <th>Risk Tier</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historyRecords.slice(0, 4).map((record) => (
+                      <tr key={record.id}>
+                        <td>
+                          <span style={{ fontWeight: '500', color: 'var(--text-primary)', fontSize: 'var(--text-sm)' }}>
+                            {record.repository?.name || 'Repository'}
+                          </span>
+                        </td>
+                        <td style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}>
+                          {record.displayTimestamp || record.timestamp || 'Snapshot'}
+                        </td>
+                        <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)', fontWeight: '600' }}>
+                          {typeof record.summary?.cmdi === 'number' ? record.summary.cmdi.toFixed(1) : 'N/A'}
+                        </td>
+                        <td>
+                          <Badge variant={record.summary?.riskSeverity || 'default'}>
+                            {record.summary?.riskCategory || 'Unknown'}
+                          </Badge>
+                        </td>
+                        <td>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => restoreAnalysis(record)}
+                            icon={<RotateCcw size={12} />}
+                          >
+                            View
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardBody>
+          </Card>
+        </section>
+      )}
+
+      {/* -------------------------------------------------------------------- */}
+      {/* SECTION H: Priority Findings                                         */}
       {/* -------------------------------------------------------------------- */}
       <section aria-labelledby="priority-findings-heading">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-sm)', marginBottom: 'var(--space-sm)' }}>
@@ -676,9 +918,9 @@ export function OverviewPage() {
       </section>
 
       {/* -------------------------------------------------------------------- */}
-      {/* SECTION F: Recommended Next Action                                   */}
+      {/* SECTION I: Quick Actions                                             */}
       {/* -------------------------------------------------------------------- */}
-      <section aria-labelledby="next-action-heading">
+      <section aria-labelledby="quick-actions-heading">
         <div
           style={{
             background: 'var(--bg-card)',
@@ -694,7 +936,7 @@ export function OverviewPage() {
         >
           <div style={{ maxWidth: '640px' }}>
             <h2
-              id="next-action-heading"
+              id="quick-actions-heading"
               style={{
                 fontSize: 'var(--text-base)',
                 fontWeight: 'var(--font-semibold)',
@@ -706,22 +948,36 @@ export function OverviewPage() {
               }}
             >
               <Play size={16} style={{ color: 'var(--accent-primary)' }} />
-              Recommended Next Action
+              Quick Actions
             </h2>
             <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.45' }}>
-              {isDemoMode
-                ? 'When using demonstration data, an actual repository analysis is required before the displayed metrics and priorities can be trusted. Submit a public GitHub repository to calculate genuine McCabe cyclomatic scores, token duplication, and import cycles.'
-                : 'Run an incremental static analysis pass on your repository branch to refresh metrics, verify remediations, and track maintainability score velocity.'}
+              Quickly navigate between repository analysis, snapshot comparisons, and historical trends.
             </p>
           </div>
 
-          <Button
-            to={ROUTES.REPOSITORY}
-            variant="primary"
-            icon={<Play size={14} />}
-          >
-            Analyze Repository
-          </Button>
+          <div style={{ display: 'flex', gap: 'var(--space-sm)', flexWrap: 'wrap' }}>
+            <Button
+              to={ROUTES.REPOSITORY}
+              variant="primary"
+              icon={<Play size={14} />}
+            >
+              Analyze Another Repo
+            </Button>
+            <Button
+              to={ROUTES.COMPARE}
+              variant="secondary"
+              icon={<GitCompare size={14} />}
+            >
+              Compare Snapshots
+            </Button>
+            <Button
+              to={ROUTES.TRENDS}
+              variant="secondary"
+              icon={<TrendingUp size={14} />}
+            >
+              Historical Trends
+            </Button>
+          </div>
         </div>
       </section>
 

@@ -25,6 +25,47 @@ body {
   overflow-x: hidden;
 }
 
+/* Custom Developer Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-accent-primary);
+}
+
+/* Text Selection Styling */
+::selection {
+  background: rgba(0, 245, 160, 0.25);
+  color: #ffffff;
+}
+
+/* Accessible Focus Ring */
+:focus-visible {
+  outline: 2px solid var(--color-accent-primary);
+  outline-offset: 2px;
+}
+
+/* Reduced Motion Compliance */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 #root {
   min-height: 100%;
   display: flex;
@@ -111,25 +152,31 @@ input:focus-visible {
 }
 
 .btn-primary {
-  background-color: var(--color-accent-primary);
-  color: #080B0A;
+  background: var(--gradient-accent);
+  color: #070A08;
   font-weight: var(--font-semibold);
+  box-shadow: 0 0 16px rgba(0, 245, 160, 0.2);
+  transition: all var(--transition-fast);
 }
 
 .btn-primary:hover {
-  background-color: var(--color-accent-secondary);
-  color: #080B0A;
+  background: linear-gradient(135deg, #00FFAC 0%, #00D68C 100%);
+  color: #070A08;
+  box-shadow: 0 0 24px rgba(0, 245, 160, 0.35);
+  transform: translateY(-1px);
 }
 
 .btn-secondary {
   background-color: var(--color-surface);
   color: var(--color-text-primary);
   border-color: var(--color-border);
+  transition: all var(--transition-fast);
 }
 
 .btn-secondary:hover {
   background-color: var(--color-surface-elevated);
-  border-color: var(--color-accent-primary);
+  border-color: rgba(0, 245, 160, 0.3);
+  color: var(--color-text-primary);
 }
 
 /* Card Surface */
@@ -138,10 +185,13 @@ input:focus-visible {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   padding: var(--space-lg);
+  box-shadow: var(--shadow-sm);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
 }
 
 .card:hover {
-  border-color: rgba(38, 53, 44, 0.9);
+  border-color: rgba(0, 245, 160, 0.25);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
 /* Badge Component */

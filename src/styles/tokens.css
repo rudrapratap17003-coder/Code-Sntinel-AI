@@ -1,14 +1,18 @@
 :root {
-  /* Design Tokens — Part 2 Specification */
-  --bg-main: #080B0A;
-  --bg-sidebar: #0D120F;
-  --bg-card: #111713;
-  --bg-card-elevated: #172019;
+  /* Design Tokens — Premium Dark Developer SaaS Platform */
+  --bg-main: #070A08;
+  --bg-sidebar: #0B100D;
+  --bg-card: #101812;
+  --bg-card-elevated: #151F18;
   --accent-primary: #00F5A0;
-  --accent-secondary: #00B879;
-  --text-primary: #F2F7F3;
-  --text-secondary: #9BAAA1;
-  --border-subtle: #26352C;
+  --accent-secondary: #00C982;
+  --text-primary: #F4F7F5;
+  --text-secondary: #9AA79F;
+  --text-muted: #68756D;
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-subtle-hover: rgba(255, 255, 255, 0.16);
+  --border-emerald: rgba(0, 245, 160, 0.25);
+  
   --severity-critical: #FF5D68;
   --severity-warning: #F5B942;
   --severity-info: #55C7E8;
@@ -23,8 +27,9 @@
   --color-accent-secondary: var(--accent-secondary);
   --color-text-primary: var(--text-primary);
   --color-text-muted: var(--text-secondary);
+  --color-text-subtle: var(--text-muted);
   --color-border: var(--border-subtle);
-  --color-border-subtle: rgba(38, 53, 44, 0.6);
+  --color-border-subtle: rgba(255, 255, 255, 0.05);
 
   /* Severity Tokens */
   --color-severity-critical: var(--severity-critical);
@@ -32,13 +37,13 @@
   --color-severity-info: var(--severity-info);
   --color-severity-cyan: var(--color-info-cyan);
 
-  /* Gradients & Glows (Linear & Vercel Inspired) */
-  --gradient-accent: linear-gradient(135deg, #00F5A0 0%, #00B879 100%);
-  --gradient-surface: linear-gradient(180deg, rgba(23, 32, 25, 0.8) 0%, rgba(17, 23, 19, 0.95) 100%);
-  --gradient-hero: radial-gradient(circle at 50% 0%, rgba(0, 245, 160, 0.08) 0%, transparent 70%);
-  --glow-primary: 0 0 20px rgba(0, 245, 160, 0.12);
-  --glow-critical: 0 0 20px rgba(255, 93, 104, 0.12);
-  --glow-card: 0 4px 20px rgba(0, 0, 0, 0.4);
+  /* Gradients & Glows (SaaS Developer Aesthetic) */
+  --gradient-accent: linear-gradient(135deg, #00F5A0 0%, #00C982 100%);
+  --gradient-surface: linear-gradient(180deg, rgba(21, 31, 24, 0.7) 0%, rgba(16, 24, 18, 0.95) 100%);
+  --gradient-hero: radial-gradient(circle at 50% 0%, rgba(0, 245, 160, 0.06) 0%, transparent 65%);
+  --glow-primary: 0 0 24px rgba(0, 245, 160, 0.15);
+  --glow-critical: 0 0 24px rgba(255, 93, 104, 0.15);
+  --glow-card: 0 4px 20px rgba(0, 0, 0, 0.5);
 
   /* Typography */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;

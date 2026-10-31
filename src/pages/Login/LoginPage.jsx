@@ -72,6 +72,23 @@ export function LoginPage() {
   return (
     <div className="login-page-container">
       <div className="login-card-wrapper">
+        <div style={{ marginBottom: 'var(--space-md)', textAlign: 'left' }}>
+          <Link
+            to={ROUTES.HOME}
+            style={{
+              color: 'var(--color-text-muted)',
+              fontSize: 'var(--text-xs)',
+              textDecoration: 'none',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              transition: 'color var(--transition-fast)',
+            }}
+          >
+            ← Back to CodeSentinel AI
+          </Link>
+        </div>
+
         {/* Brand Header */}
         <div className="login-brand-header">
           <div className="login-brand-icon">
