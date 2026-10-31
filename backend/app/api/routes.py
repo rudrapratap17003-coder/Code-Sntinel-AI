@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import List
 from fastapi import APIRouter, HTTPException, status
 
+from app import config
 from app.config import (
     ENGINE_VERSION,
     ENGINE_NAME,
@@ -43,15 +44,28 @@ router = APIRouter(prefix="/api/v1", tags=["Analysis"])
 @router.get("/health")
 def get_health():
     """Engine health status and diagnostic capabilities."""
+    from app.storage.database import check_db_health
+    from app.config import get_safe_config_summary
+
+    db_ok, db_status, record_count = check_db_health()
+    cfg = get_safe_config_summary()
+
     return {
-        "status": "healthy",
+        "status": "healthy" if db_ok else "degraded",
         "engine_version": ENGINE_VERSION,
         "engine_name": ENGINE_NAME,
         "supported_languages": SUPPORTED_LANGUAGES,
-        "limits": {
-            "max_files": MAX_FILES,
-            "max_repo_size_mb": MAX_REPO_SIZE_MB,
+        "database": {
+            "status": db_status,
+            "persisted_records": record_count,
         },
+        "gemini": {
+            "configured": cfg["gemini_configured"],
+            "model": cfg["gemini_model"],
+        },
+        "environment": cfg["environment"],
+        "allow_local_analysis": cfg["allow_local_analysis"],
+        "limits": cfg["resource_limits"],
     }
 
 
@@ -95,13 +109,20 @@ def analyze_repository(request: AnalyzeRequest):
                 detail=str(ie),
             )
         except Exception as e:
+            import logging
+            logging.getLogger("codesentinel.api").exception(f"Static analysis failure: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Static analysis engine failed: {str(e)}",
+                detail="Static analysis engine encountered an unexpected error while processing the repository.",
             )
 
     # Flow B: Local Directory (Testing / Offline Scanning)
     if request.local_path:
+        if not getattr(config, "ALLOW_LOCAL_ANALYSIS", True):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Local directory analysis is disabled on this server.",
+            )
         try:
             local_dir = ingester.ingest_local_directory(request.local_path)
             repo_name = local_dir.name
@@ -119,9 +140,11 @@ def analyze_repository(request: AnalyzeRequest):
                 detail=str(ie),
             )
         except Exception as e:
+            import logging
+            logging.getLogger("codesentinel.api").exception(f"Local static analysis failure: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Local static analysis engine failed: {str(e)}",
+                detail="Local static analysis engine encountered an unexpected error while processing the directory.",
             )
 
 

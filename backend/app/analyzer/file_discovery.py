@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 
 from app.config import MAX_FILES, MAX_FILE_SIZE_BYTES
+from app.ingestion.validator import is_path_within_workspace
 
 IGNORED_DIRS = {
     ".git",
@@ -51,6 +52,18 @@ def discover_python_files(repo_root: Path) -> Tuple[List[DiscoveredFile], List[s
                 continue
 
             file_path = Path(root) / filename
+
+            # Security: Verify symlinks do not escape repository boundary
+            is_link = file_path.is_symlink() or (hasattr(os.path, "isjunction") and os.path.isjunction(file_path))
+            if is_link:
+                try:
+                    resolved_file = file_path.resolve()
+                    if not is_path_within_workspace(resolved_file, repo_root):
+                        warnings.append(f"Security: Skipping symlink {filename} pointing outside repository.")
+                        continue
+                except (OSError, RuntimeError):
+                    warnings.append(f"Security: Skipping cyclic or invalid symlink {filename}.")
+                    continue
             try:
                 rel_path = str(file_path.relative_to(repo_root))
             except ValueError:

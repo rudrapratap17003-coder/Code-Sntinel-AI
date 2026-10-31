@@ -71,10 +71,8 @@ def test_analyze_local_syntax_error_repo():
 def test_analyze_empty_repo():
     empty_path = str(FIXTURES_DIR / "empty_repo")
     res = client.post("/api/v1/analyze", json={"local_path": empty_path})
-    assert res.status_code == 200
-    data = res.json()
-    assert data["repository"]["files_examined"] == 0
-    assert data["summary"]["cmdi"] == 0.0
+    assert res.status_code == 422
+    assert "No supported Python (.py) source files found" in res.json()["detail"]
 
 
 def test_analyze_invalid_github_url_fails():

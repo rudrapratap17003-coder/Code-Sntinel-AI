@@ -25,6 +25,7 @@ from app.models.schemas import (
     DependencyEdge,
     FindingModel,
     IndicatorScore,
+    HotspotModel,
 )
 
 
@@ -59,7 +60,7 @@ class StaticAnalysisEngine:
         syntax_errors = []
 
         for f in discovered_files:
-            if not f.content:
+            if f.content is None:
                 continue
             tree, syntax_err = check_syntax(f.content, f.relative_path)
             if syntax_err:
@@ -179,37 +180,165 @@ class StaticAnalysisEngine:
             "system_modularity_score": round(max(0.0, 100.0 - (len(circular_cycles) * 20.0 + max_ca * 2.5)), 1),
         }
 
-        # 8. Identify Maintainability Hotspots (Complexity × Churn / LOC / Callers)
+        # 8. Identify Architectural Maintainability Hotspots
+        # Evaluated deterministically using multi-metric intersection: complexity, coupling, duplication, error patterns
         hotspots: List[Dict[str, Any]] = []
         hotspot_id = 1
-        # Sort files by complexity * callers * lines
         scored_files = []
+
         for f in valid_files:
             rel = f.relative_path
             ca = in_degrees.get(rel, 0)
+            ce = out_degrees.get(rel, 0)
             funcs = [fn for fn in all_functions if fn.file_path == rel]
             top_comp = max((fn.complexity for fn in funcs), default=1)
-            score = top_comp * 10 + ca * 5 + min(30, f.lines_of_code // 20)
-            scored_files.append((score, top_comp, ca, f))
+            total_comp = sum(fn.complexity for fn in funcs)
 
-        scored_files.sort(key=lambda x: x[0], reverse=True)
-        for score, top_comp, ca, f in scored_files[:3]:
-            if top_comp > 10 or ca >= 4 or f.lines_of_code > 200:
-                hotspots.append({
-                    "id": f"hotspot-{hotspot_id}",
-                    "file": f.relative_path,
-                    "complexity": top_comp,
-                    "churn_commits": max(5, ca * 8 + 12),  # Inferred architectural volatility indicator
-                    "risk_factor": min(95, int(score)),
-                    "risk_priority": "Critical Priority" if top_comp >= 20 else "Moderate Risk",
-                    "estimated_fix_hours": 12 if top_comp >= 20 else 6,
-                    "why_it_matters": (
-                        f"Module contains function complexity of {top_comp} with {ca} dependent modules. "
-                        "Modifications carry elevated blast radius and testing difficulty."
-                    ),
-                    "suggested_remediation": "Decompose complex routines and invert dependent caller relationships.",
-                })
-                hotspot_id += 1
+            # Circular cycle involvement
+            in_circular_cycle = any(rel in scc for scc in circular_cycles)
+
+            # Duplicate blocks in this file
+            file_dup_matches = [m for m in dup_matches if m.file_a == rel or m.file_b == rel]
+            file_dup_lines = sum(m.line_count for m in file_dup_matches)
+
+            # Error handling violations in this file
+            file_error_violations = [v for v in error_violations if v.get("file") == rel]
+            file_error_count = len(file_error_violations)
+
+            # 1. Complexity component (0 - 40 pts)
+            comp_score = 0
+            if top_comp >= 25:
+                comp_score = 40
+            elif top_comp >= 15:
+                comp_score = 25 + int((top_comp - 15) * 1.5)
+            elif top_comp >= 10:
+                comp_score = 10 + (top_comp - 10)
+
+            # 2. Coupling & Blast Radius component (0 - 30 pts)
+            coupling_score = min(20, ca * 5)
+            if in_circular_cycle:
+                coupling_score += 10
+
+            # 3. Duplication component (0 - 15 pts)
+            dup_score = min(15, (file_dup_lines // 10) * 5)
+
+            # 4. Error Handling component (0 - 15 pts)
+            error_score = min(15, file_error_count * 5)
+
+            # Composite Architectural Volatility / Risk Score (0 - 100)
+            # NOTE: File length alone does NOT generate risk points.
+            volatility_score = float(min(100, comp_score + coupling_score + dup_score + error_score))
+
+            scored_files.append({
+                "file": f,
+                "rel_path": rel,
+                "top_comp": top_comp,
+                "total_comp": total_comp,
+                "ca": ca,
+                "ce": ce,
+                "in_circular_cycle": in_circular_cycle,
+                "file_dup_lines": file_dup_lines,
+                "file_dup_count": len(file_dup_matches),
+                "file_error_count": file_error_count,
+                "volatility_score": volatility_score,
+                "funcs": funcs,
+            })
+
+        # Deterministic sorting: sort by volatility_score desc, top_comp desc, ca desc, then file path asc
+        scored_files.sort(
+            key=lambda x: (
+                -x["volatility_score"],
+                -x["top_comp"],
+                -x["ca"],
+                x["rel_path"].lower(),
+            )
+        )
+
+        for item in scored_files[:5]:
+            # Qualify as hotspot only if it meets concrete structural risk criteria
+            is_qualified = (
+                item["volatility_score"] >= 20
+                or item["top_comp"] >= 15
+                or item["in_circular_cycle"]
+                or item["ca"] >= 4
+            )
+            if not is_qualified:
+                continue
+
+            # Build concrete supporting evidence points
+            evidence_points = []
+            if item["top_comp"] >= 10:
+                top_fn = max(item["funcs"], key=lambda fn: fn.complexity) if item["funcs"] else None
+                top_fn_name = top_fn.display_name if top_fn else "routine"
+                evidence_points.append(f"Peak McCabe complexity of {item['top_comp']} in {top_fn_name}")
+            if item["ca"] > 0:
+                evidence_points.append(f"Afferent coupling of {item['ca']} dependent internal module(s)")
+            if item["in_circular_cycle"]:
+                evidence_points.append("Module is entangled in an architectural circular dependency loop")
+            if item["file_dup_lines"] > 0:
+                evidence_points.append(f"{item['file_dup_lines']} lines of duplicated code across {item['file_dup_count']} block(s)")
+            if item["file_error_count"] > 0:
+                evidence_points.append(f"{item['file_error_count']} error-handling anti-pattern(s) flagged")
+
+            why_it_matters = (
+                "; ".join(evidence_points)
+                if evidence_points
+                else "Module exhibits elevated architectural friction based on combined metrics."
+            )
+
+            # Assign risk priority based on measured risk
+            if item["volatility_score"] >= 60 or item["top_comp"] >= 25:
+                risk_priority = "Critical Priority"
+                fix_hours = 12
+            elif item["volatility_score"] >= 35 or item["top_comp"] >= 15:
+                risk_priority = "High Priority"
+                fix_hours = 8
+            else:
+                risk_priority = "Moderate Risk"
+                fix_hours = 4
+
+            vol_label = (
+                "High Volatility"
+                if item["volatility_score"] >= 50
+                else ("Moderate Volatility" if item["volatility_score"] >= 25 else "Stable")
+            )
+
+            hotspot_obj = {
+                "id": f"hotspot-{hotspot_id}",
+                "file": item["rel_path"],
+                "complexity": item["top_comp"],
+                "total_complexity": item["total_comp"],
+                "afferent_coupling": item["ca"],
+                "efferent_coupling": item["ce"],
+                "in_circular_cycle": item["in_circular_cycle"],
+                "duplicate_lines": item["file_dup_lines"],
+                "error_violations_count": item["file_error_count"],
+                "volatility_score": item["volatility_score"],
+                "architectural_volatility_estimate": item["volatility_score"],
+                "volatility_label": vol_label,
+                "churn_commits": None,  # Transparently None: Git commit history is not measured statically
+                "is_git_measured": False,
+                "data_source": "Static Architectural Heuristic (Not measured Git commit history)",
+                "risk_factor": int(item["volatility_score"]),
+                "risk_priority": risk_priority,
+                "estimated_fix_hours": fix_hours,
+                "why_it_matters": why_it_matters,
+                "supporting_evidence": {
+                    "top_complexity": item["top_comp"],
+                    "total_complexity": item["total_comp"],
+                    "dependent_callers": item["ca"],
+                    "imported_dependencies": item["ce"],
+                    "is_circular": item["in_circular_cycle"],
+                    "duplicate_lines": item["file_dup_lines"],
+                    "error_violations": item["file_error_count"],
+                },
+                "suggested_remediation": (
+                    "Decompose complex routines into smaller, single-purpose helper functions. "
+                    "Extract shared interfaces to reduce afferent blast radius and decouple module cycles."
+                ),
+            }
+            hotspots.append(hotspot_obj)
+            hotspot_id += 1
 
         # 9. Compute Scoring & CMDI
         normalized_risks = normalize_indicator_risks(
@@ -248,6 +377,7 @@ class StaticAnalysisEngine:
             "Analysis is restricted strictly to Python (.py) source files.",
             "Dynamic imports (such as `importlib.import_module()`) are not traced statically.",
             "Runtime execution paths, environment variables, and external network services are not executed.",
+            "Code churn and volatility are estimated via static architectural coupling and complexity heuristics, not measured Git commit logs.",
             "Duplicate code detection applies a 10-line sliding-window heuristic and may flag intentional structural boilerplate.",
             "Error-handling checks identify syntactic anti-patterns (e.g. bare except) but cannot evaluate semantic appropriateness of caught exceptions.",
         ]

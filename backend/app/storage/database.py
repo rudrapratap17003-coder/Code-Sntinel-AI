@@ -2,7 +2,7 @@
 
 import sqlite3
 import json
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from pathlib import Path
 
 from app.config import DATABASE_PATH
@@ -12,11 +12,12 @@ from app.models.schemas import AnalysisResult, AnalysisListItem
 def get_db_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(DATABASE_PATH)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON;")
     return conn
 
 
 def init_db():
-    """Initializes the SQLite database tables."""
+    """Initializes the SQLite database tables without altering or dropping existing records."""
     conn = get_db_connection()
     try:
         with conn:
@@ -43,6 +44,23 @@ def init_db():
             )
     finally:
         conn.close()
+
+
+def check_db_health() -> Tuple[bool, str, int]:
+    """Probes SQLite database connectivity and returns (is_healthy, status_message, record_count)."""
+    try:
+        conn = get_db_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1;")
+            cursor.fetchone()
+            cursor.execute("SELECT COUNT(*) FROM analyses;")
+            count = cursor.fetchone()[0]
+            return True, "connected", count
+        finally:
+            conn.close()
+    except Exception as e:
+        return False, f"database_error: {type(e).__name__}", 0
 
 
 def save_analysis(result: AnalysisResult) -> None:

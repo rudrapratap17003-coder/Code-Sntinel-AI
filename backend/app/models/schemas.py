@@ -101,6 +101,30 @@ class ArchitectureGraphModel(BaseModel):
     edges: List[DependencyEdge]
 
 
+class HotspotModel(BaseModel):
+    id: str = Field(..., description="Stable hotspot identifier (e.g. hotspot-1)")
+    file: str = Field(..., description="Relative file path within repository")
+    complexity: int = Field(..., description="Highest function cyclomatic complexity in file")
+    total_complexity: int = Field(0, description="Sum of cyclomatic complexity across all functions in file")
+    afferent_coupling: int = Field(0, description="Count of internal modules that depend on this file")
+    efferent_coupling: int = Field(0, description="Count of internal modules this file imports")
+    in_circular_cycle: bool = Field(False, description="Whether file is part of a circular dependency cycle")
+    duplicate_lines: int = Field(0, description="Total duplicated lines in file")
+    error_violations_count: int = Field(0, description="Count of error-handling anti-patterns in file")
+    volatility_score: float = Field(..., description="Calculated architectural volatility heuristic score (0-100)")
+    architectural_volatility_estimate: float = Field(..., description="Alias for volatility_score")
+    volatility_label: str = Field("Moderate Volatility", description="Volatility category: High Volatility, Moderate Volatility, Stable")
+    churn_commits: Optional[int] = Field(None, description="DEPRECATED: Real Git churn is not measured statically. Use volatility_score.")
+    is_git_measured: bool = Field(False, description="Explicit indicator that Git commit history is not measured")
+    data_source: str = Field("Static Architectural Heuristic (Not measured Git commit history)", description="Data provenance note")
+    risk_factor: int = Field(..., description="Overall risk factor score (0-100)")
+    risk_priority: str = Field(..., description="Risk priority tier: Critical Priority, High Priority, Moderate Risk")
+    estimated_fix_hours: int = Field(..., description="Estimated engineering hours to remediate")
+    why_it_matters: str = Field(..., description="Multi-factor explanation based on actual static measurements")
+    supporting_evidence: Dict[str, Any] = Field(default_factory=dict, description="Structured measurement breakdown")
+    suggested_remediation: str = Field(..., description="Actionable refactoring recommendations")
+
+
 class AnalysisResult(BaseModel):
     id: str = Field(..., description="Unique analysis execution identifier")
     timestamp: str
@@ -110,7 +134,7 @@ class AnalysisResult(BaseModel):
     indicators: List[IndicatorScore]
     findings: List[FindingModel]
     priority_findings: List[FindingModel]
-    hotspots: List[Dict[str, Any]]
+    hotspots: List[HotspotModel] = Field(default_factory=list, description="Architectural maintainability hotspots")
     architecture: ArchitectureGraphModel
     analysis_limitations: List[str] = Field(default_factory=list)
 
