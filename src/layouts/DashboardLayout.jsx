@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { TopNavigation } from './TopNavigation';
 
@@ -9,6 +9,7 @@ import { TopNavigation } from './TopNavigation';
  */
 export function DashboardLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const location = useLocation();
 
   return (
     <div className="dashboard-layout">
@@ -30,7 +31,9 @@ export function DashboardLayout() {
         <TopNavigation onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
 
         <main className="dashboard-content">
-          <Outlet />
+          <div key={location.pathname} className="page-transition-container">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>

@@ -90,33 +90,56 @@
 
 /* Landing Page Styles */
 .hero-section {
-  padding: var(--space-3xl) var(--space-md);
+  padding: clamp(2.5rem, 6vw, 4.5rem) var(--space-md) var(--space-2xl);
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
   position: relative;
+  max-width: 1080px;
+  margin: 0 auto;
+}
+
+.hero-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(700px, 90vw);
+  height: 320px;
+  background: radial-gradient(ellipse 60% 50% at 50% 10%, rgba(0, 245, 160, 0.12), transparent 70%);
+  pointer-events: none;
+  z-index: 0;
 }
 
 .hero-pill {
+  position: relative;
+  z-index: 1;
   margin-bottom: var(--space-lg);
 }
 
 .hero-title {
-  font-size: 2.75rem;
-  font-weight: var(--font-bold);
-  max-width: 800px;
+  position: relative;
+  z-index: 1;
+  font-size: clamp(2.4rem, 5.5vw, 3.6rem);
+  font-weight: 800;
+  max-width: 860px;
   margin-bottom: var(--space-md);
-  line-height: 1.2;
-  letter-spacing: -0.03em;
+  line-height: 1.15;
+  letter-spacing: -0.035em;
+  color: var(--color-text-primary);
 }
 
 .hero-title .highlight {
   color: var(--color-accent-primary);
+  text-shadow: 0 0 24px rgba(0, 245, 160, 0.35);
 }
 
 .hero-tagline {
-  font-size: var(--text-xl);
+  position: relative;
+  z-index: 1;
+  font-size: clamp(1.15rem, 2.5vw, 1.35rem);
   font-weight: var(--font-medium);
   color: var(--color-text-primary);
   margin-bottom: var(--space-md);
@@ -124,7 +147,9 @@
 }
 
 .hero-description {
-  font-size: var(--text-lg);
+  position: relative;
+  z-index: 1;
+  font-size: clamp(0.95rem, 1.8vw, 1.05rem);
   color: var(--color-text-muted);
   max-width: 640px;
   margin-bottom: var(--space-2xl);
@@ -132,19 +157,25 @@
 }
 
 .hero-actions {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: var(--space-md);
   flex-wrap: wrap;
   justify-content: center;
+  margin-bottom: var(--space-3xl);
 }
 
 .features-grid {
+  position: relative;
+  z-index: 1;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
   gap: var(--space-lg);
-  margin: var(--space-2xl) 0;
+  margin: var(--space-xl) 0;
   width: 100%;
+  text-align: left;
 }
 
 .feature-card {
@@ -155,35 +186,161 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  transition: transform var(--transition-fast), border-color var(--transition-fast);
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.feature-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
 }
 
 .feature-card:hover {
-  border-color: var(--color-accent-primary);
+  border-color: rgba(0, 245, 160, 0.4);
   transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35), 0 0 16px rgba(0, 245, 160, 0.06);
 }
 
 .feature-icon-wrapper {
   width: 44px;
   height: 44px;
-  background-color: var(--color-surface-elevated);
-  border: 1px solid var(--color-border);
+  background-color: rgba(0, 245, 160, 0.08);
+  border: 1px solid rgba(0, 245, 160, 0.2);
   border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
   margin-bottom: var(--space-md);
   color: var(--color-accent-primary);
+  flex-shrink: 0;
 }
 
 .feature-title {
-  font-size: var(--text-lg);
+  font-size: var(--text-base);
   font-weight: var(--font-semibold);
+  color: var(--color-text-primary);
   margin-bottom: var(--space-xs);
+  letter-spacing: -0.01em;
 }
 
 .feature-description {
   font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  line-height: 1.55;
+  margin: 0;
+}
+
+/* Login Page Styles */
+.login-page-container {
+  min-height: calc(100vh - 120px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2xl) var(--space-md);
+  position: relative;
+}
+
+.login-page-container::before {
+  content: '';
+  position: absolute;
+  top: 15%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(520px, 90vw);
+  height: 280px;
+  background: radial-gradient(ellipse 50% 50% at 50% 50%, rgba(0, 245, 160, 0.09), transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.login-card-wrapper {
+  width: 100%;
+  max-width: 440px;
+  position: relative;
+  z-index: 1;
+}
+
+.login-brand-header {
+  text-align: center;
+  margin-bottom: var(--space-xl);
+}
+
+.login-brand-icon {
+  width: 48px;
+  height: 48px;
+  background: rgba(0, 245, 160, 0.08);
+  border: 1px solid rgba(0, 245, 160, 0.25);
+  border-radius: var(--radius-lg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-accent-primary);
+  margin-bottom: var(--space-sm);
+  box-shadow: 0 0 16px rgba(0, 245, 160, 0.15);
+}
+
+.login-brand-title {
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  letter-spacing: -0.02em;
+  margin-bottom: 4px;
+  color: var(--color-text-primary);
+}
+
+.login-brand-title span {
+  color: var(--color-accent-primary);
+}
+
+.login-brand-tagline {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.login-demo-banner {
+  background-color: rgba(0, 245, 160, 0.08);
+  border: 1px solid rgba(0, 245, 160, 0.3);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-lg);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: var(--text-xs);
+}
+
+.login-divider {
+  display: flex;
+  align-items: center;
+  margin: var(--space-xl) 0;
+  color: var(--color-border);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.login-divider-line {
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
+}
+
+.login-divider-text {
+  padding: 0 var(--space-sm);
+  color: var(--color-text-muted);
+}
+
+.login-provenance-note {
+  margin-top: var(--space-xl);
+  text-align: center;
+  font-size: var(--text-xs);
   color: var(--color-text-muted);
   line-height: 1.5;
 }

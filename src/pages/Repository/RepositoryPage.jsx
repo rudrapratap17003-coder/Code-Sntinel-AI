@@ -442,8 +442,8 @@ export function RepositoryPage() {
                 </div>
               </div>
 
-              {/* Progress Bar (Visible while analyzing) */}
-              {isAnalyzing && analysisStage && (
+              {/* Progress Indicator (Truthful indeterminate execution state as mandated by Phase 29) */}
+              {isAnalyzing && (
                 <div
                   style={{
                     backgroundColor: 'var(--color-surface-elevated)',
@@ -453,19 +453,22 @@ export function RepositoryPage() {
                     marginTop: 'var(--space-xs)',
                   }}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-xs)', marginBottom: '4px' }}>
-                    <span style={{ color: 'var(--color-accent-primary)', fontWeight: 'var(--font-semibold)' }}>
-                      Step {analysisStage.step} of 5: {analysisMode === 'live' ? 'Static Engine Analysis' : 'Demo Simulation'}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 'var(--text-xs)', marginBottom: '4px' }}>
+                    <span style={{ color: 'var(--color-accent-primary)', fontWeight: 'var(--font-semibold)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                      <RefreshCw size={12} className="spinning-icon" />
+                      <span>{analysisMode === 'live' ? 'Executing Python Static Analysis Engine' : 'Loading Demonstration Dataset'}</span>
                     </span>
                     <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-text-muted)' }}>
-                      {analysisStage.percent}%
+                      In progress...
                     </span>
                   </div>
                   <div className="progress-container">
-                    <div className="progress-fill" style={{ width: `${analysisStage.percent}%` }} />
+                    <div className="progress-fill-indeterminate" />
                   </div>
                   <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', margin: 0 }}>
-                    {analysisStage.label}
+                    {analysisMode === 'live'
+                      ? 'Cloning repository tarball into sandboxed memory, constructing AST, and analyzing complexity...'
+                      : 'Preparing deterministic evaluation metrics and sample maintainability hotspots...'}
                   </p>
                 </div>
               )}

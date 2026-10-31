@@ -26,7 +26,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Enable CORS for CodeSentinel AI frontend (Vite dev server and production)
+# Enable CORS for CodeSentinel AI frontend (Vite dev server, LAN/Wi-Fi, and production)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -36,7 +36,10 @@ app.add_middleware(
         "http://127.0.0.1:5173",
         "http://localhost:4173",
         "http://127.0.0.1:4173",
+        "http://172.20.231.35:3000",
+        "http://172.20.231.35:8000",
     ],
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|172\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -53,6 +56,13 @@ def root_index():
         "docs_url": "/docs",
         "health_url": "/api/v1/health",
     }
+
+
+@app.get("/health")
+def root_health():
+    """Root health endpoint alias for service monitors and external health checks."""
+    from app.api.routes import get_health
+    return get_health()
 
 
 if __name__ == "__main__":

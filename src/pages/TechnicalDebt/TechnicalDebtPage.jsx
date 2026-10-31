@@ -52,7 +52,7 @@ export function TechnicalDebtPage() {
           <EmptyState
             icon={<FolderPlus size={36} color="var(--color-accent-primary)" />}
             title="No Codebase Analysis Selected"
-            description="To explore the Composite Maintenance Debt Index (CMDI) and indicator breakdowns, submit a GitHub repository URL or initialize the demonstration dataset."
+            description="To explore the Code Maintainability Debt Index (CMDI) and indicator breakdowns, submit a GitHub repository URL or initialize the demonstration dataset."
             action={
               <div style={{ display: 'flex', gap: 'var(--space-md)', flexWrap: 'wrap', justifyContent: 'center' }}>
                 <Button
@@ -135,7 +135,7 @@ export function TechnicalDebtPage() {
                     color: 'var(--color-text-muted)',
                   }}
                 >
-                  Composite Maintenance Debt Index (CMDI)
+                  Code Maintainability Debt Index (CMDI)
                 </span>
                 <Badge variant={currentTier.variant}>
                   {currentTier.label}
@@ -266,10 +266,18 @@ export function TechnicalDebtPage() {
 
             {/* Scale Legends */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-xs)', marginTop: 'var(--space-xs)', textAlign: 'center', fontSize: 'var(--text-xs)', fontFamily: 'var(--font-mono)' }}>
-              <div style={{ color: '#00F5A0' }}>0–25: Low</div>
-              <div style={{ color: '#55C7E8' }}>26–50: Moderate</div>
-              <div style={{ color: '#F5B942', fontWeight: 'bold' }}>51–75: High (Current)</div>
-              <div style={{ color: '#FF5D68' }}>76–100: Critical</div>
+              <div style={{ color: '#00F5A0', fontWeight: currentTier.id === 'low' ? 'bold' : 'normal' }}>
+                0–25: Low {currentTier.id === 'low' ? '(Current)' : ''}
+              </div>
+              <div style={{ color: '#55C7E8', fontWeight: currentTier.id === 'moderate' ? 'bold' : 'normal' }}>
+                26–50: Moderate {currentTier.id === 'moderate' ? '(Current)' : ''}
+              </div>
+              <div style={{ color: '#F5B942', fontWeight: currentTier.id === 'high' ? 'bold' : 'normal' }}>
+                51–75: High {currentTier.id === 'high' ? '(Current)' : ''}
+              </div>
+              <div style={{ color: '#FF5D68', fontWeight: currentTier.id === 'critical' ? 'bold' : 'normal' }}>
+                76–100: Critical {currentTier.id === 'critical' ? '(Current)' : ''}
+              </div>
             </div>
           </div>
         </CardBody>

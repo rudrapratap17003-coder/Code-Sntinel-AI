@@ -12,9 +12,12 @@ export function Badge({ variant = 'default', children, className = '', ...props 
     default: 'badge',
     demo: 'badge badge-demo',
     critical: 'badge badge-critical',
+    high: 'badge badge-critical',
     medium: 'badge badge-medium',
+    warning: 'badge badge-medium',
+    low: 'badge badge-info',
     success: 'badge badge-success',
-    info: 'badge badge-demo',
+    info: 'badge badge-info',
   }[variant] || 'badge';
 
   return (

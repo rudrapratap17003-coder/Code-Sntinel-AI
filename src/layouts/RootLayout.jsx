@@ -1,10 +1,12 @@
 import React from 'react';
-import { Outlet, Link } from 'react-router-dom';
+import { Outlet, Link, useLocation } from 'react-router-dom';
 import { Shield, Sparkles } from 'lucide-react';
 import { Badge } from '../components/ui/Badge';
 import { APP_CONFIG, ROUTES } from '../utils/constants';
 
 export function RootLayout() {
+  const location = useLocation();
+
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -32,7 +34,9 @@ export function RootLayout() {
       </header>
 
       <main className="main-content">
-        <Outlet />
+        <div key={location.pathname} className="page-transition-container">
+          <Outlet />
+        </div>
       </main>
 
       <footer className="app-footer">

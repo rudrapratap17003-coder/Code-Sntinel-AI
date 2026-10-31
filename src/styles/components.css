@@ -219,6 +219,11 @@
   -webkit-overflow-scrolling: touch;
 }
 
+.card-body > .table-wrapper {
+  border: none;
+  border-radius: 0;
+}
+
 .data-table {
   width: 100%;
   border-collapse: collapse;
@@ -409,6 +414,23 @@
   height: 100%;
   background: linear-gradient(90deg, var(--color-accent-secondary), var(--color-accent-primary));
   transition: width var(--transition-normal);
+}
+
+.progress-fill-indeterminate {
+  height: 100%;
+  width: 45%;
+  background: linear-gradient(90deg, var(--color-accent-secondary), var(--color-accent-primary));
+  border-radius: var(--radius-full);
+  animation: indeterminateProgress 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes indeterminateProgress {
+  0% {
+    margin-left: -45%;
+  }
+  100% {
+    margin-left: 100%;
+  }
 }
 
 .spinner {
@@ -712,9 +734,24 @@
   background: #172019;
   border-radius: var(--radius-full);
   position: relative;
-  overflow: hidden;
-  margin: 2px 0 2px 0;
+  overflow: visible;
+  margin: 6px 0 8px 0;
   border: 1px solid var(--border-subtle);
+}
+
+.cmdi-meter-pin {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 14px;
+  height: 14px;
+  background: #ffffff;
+  border: 2px solid var(--bg-main);
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(0, 245, 160, 0.8);
+  pointer-events: none;
+  transition: left 0.4s ease;
+  z-index: 2;
 }
 
 .cmdi-meter-gradient {
@@ -831,15 +868,270 @@
   -webkit-overflow-scrolling: touch;
 }
 
+/* Button Variants & Extensions */
+.btn-sm {
+  padding: 4px 10px;
+  font-size: var(--text-xs);
+  height: var(--input-height-sm, 32px);
+}
+
+.btn-lg {
+  padding: 10px 20px;
+  font-size: var(--text-base);
+  height: var(--input-height-lg, 44px);
+}
+
+.btn-block {
+  width: 100%;
+}
+
+.btn-outline {
+  background: transparent;
+  border-color: var(--color-border);
+  color: var(--color-text-primary);
+}
+
+.btn-outline:hover {
+  border-color: var(--color-accent-primary);
+  color: var(--color-accent-primary);
+  background: rgba(0, 245, 160, 0.04);
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--color-text-muted);
+}
+
+.btn-ghost:hover {
+  background: var(--color-surface-elevated);
+  color: var(--color-text-primary);
+}
+
+.btn-danger {
+  background: rgba(255, 93, 104, 0.12);
+  border-color: rgba(255, 93, 104, 0.4);
+  color: var(--color-severity-critical);
+}
+
+.btn-danger:hover {
+  background: rgba(255, 93, 104, 0.22);
+  border-color: var(--color-severity-critical);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-color: var(--accent-primary);
+}
+
+.btn-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(8, 11, 10, 0.3);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  display: inline-block;
+}
+
+/* Badge Extension Styles */
+.badge-info {
+  background-color: rgba(56, 200, 255, 0.12);
+  color: #38C8FF;
+  border-color: rgba(56, 200, 255, 0.3);
+}
+
+.badge-warning {
+  background-color: rgba(245, 185, 66, 0.12);
+  color: var(--severity-warning);
+  border-color: rgba(245, 185, 66, 0.3);
+}
+
+/* Skeleton Loading Shimmer System */
+.skeleton-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--space-md);
+  width: 100%;
+}
+
+.skeleton-card {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(23, 32, 25, 0.6) 0%,
+    rgba(38, 53, 44, 0.45) 50%,
+    rgba(23, 32, 25, 0.6) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s infinite ease-in-out;
+  border-radius: var(--radius-sm);
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.skeleton-title {
+  height: 20px;
+  width: 60%;
+}
+
+.skeleton-line {
+  height: 14px;
+  width: 100%;
+}
+
+.skeleton-line.short {
+  width: 40%;
+}
+
+.skeleton-table {
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.skeleton-table-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-sm) 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.skeleton-cell {
+  height: 16px;
+}
+
+.skeleton-cell.sm {
+  width: 80px;
+}
+
+.skeleton-cell.md {
+  width: 140px;
+}
+
+.skeleton-cell.lg {
+  flex: 1;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Page & Card Motion System (Linear/Vercel Inspired) */
+.page-transition-container {
+  animation: pageFadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes pageFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.card,
+.summary-stat-card,
+.indicator-card,
+.metric-card,
+.feature-card {
+  animation: cardFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes cardFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Modal and Dropdown Motion */
+.modal-overlay {
+  animation: overlayFadeIn 0.18s ease-out both;
+}
+
+@keyframes overlayFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.modal-dialog {
+  animation: modalScaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes modalScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
 /* Reduced Motion Override */
 @media (prefers-reduced-motion: reduce) {
+  .page-transition-container,
+  .card,
+  .summary-stat-card,
+  .indicator-card,
+  .metric-card,
+  .feature-card,
+  .modal-overlay,
+  .modal-dialog,
+  .skeleton-shimmer,
+  .cmdi-meter-gradient,
   .spinner {
-    animation: none;
-    border-top-color: var(--color-accent-primary);
-    opacity: 0.8;
-  }
-  .modal-dialog {
-    animation: none;
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
   }
   *, *::before, *::after {
     transition-duration: 0.01ms !important;

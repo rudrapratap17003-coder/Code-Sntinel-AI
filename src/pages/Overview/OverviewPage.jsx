@@ -416,6 +416,11 @@ export function OverviewPage() {
               className="cmdi-meter-gradient"
               style={{ width: `${clampedCmdi}%` }}
             />
+            <div
+              className="cmdi-meter-pin"
+              style={{ left: `${clampedCmdi}%` }}
+              title={`Score: ${clampedCmdi.toFixed(1)}`}
+            />
           </div>
 
           <div className="cmdi-meter-tiers" aria-hidden="true">

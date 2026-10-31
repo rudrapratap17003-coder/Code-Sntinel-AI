@@ -70,42 +70,19 @@ export function LoginPage() {
   };
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 'var(--space-xl) var(--space-md)',
-        background: 'var(--color-bg)',
-      }}
-    >
-      <div style={{ width: '100%', maxWidth: '440px' }}>
+    <div className="login-page-container">
+      <div className="login-card-wrapper">
         {/* Brand Header */}
-        <div style={{ textAlign: 'center', marginBottom: 'var(--space-2xl)' }}>
-          <div
-            style={{
-              width: '48px',
-              height: '48px',
-              background: 'var(--color-surface)',
-              border: '1px solid var(--color-border)',
-              borderRadius: 'var(--radius-lg)',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--color-accent-primary)',
-              marginBottom: 'var(--space-sm)',
-            }}
-          >
+        <div className="login-brand-header">
+          <div className="login-brand-icon">
             <Shield size={26} strokeWidth={2.4} />
           </div>
 
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', letterSpacing: '-0.02em', marginBottom: '4px' }}>
-            CodeSentinel <span style={{ color: 'var(--color-accent-primary)' }}>AI</span>
+          <h1 className="login-brand-title">
+            CodeSentinel <span>AI</span>
           </h1>
 
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)' }}>
+          <p className="login-brand-tagline">
             {APP_CONFIG.tagline}
           </p>
         </div>
@@ -115,19 +92,7 @@ export function LoginPage() {
           <CardBody style={{ padding: 'var(--space-xl)' }}>
             {/* Demo Status Banner if already authenticated */}
             {isDemoSession && (
-              <div
-                style={{
-                  backgroundColor: 'rgba(0, 245, 160, 0.08)',
-                  border: '1px solid rgba(0, 245, 160, 0.3)',
-                  borderRadius: 'var(--radius-md)',
-                  padding: 'var(--space-sm) var(--space-md)',
-                  marginBottom: 'var(--space-lg)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  fontSize: 'var(--text-xs)',
-                }}
-              >
+              <div className="login-demo-banner">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-accent-primary)' }}>
                   <CheckCircle2 size={15} />
                   <span>Demo session active</span>
@@ -156,13 +121,14 @@ export function LoginPage() {
               <Button
                 type="button"
                 variant="primary"
+                size="lg"
+                fullWidth
                 onClick={handleEnterDemo}
-                iconEnd={<ArrowRight size={16} />}
-                style={{ width: '100%', padding: '12px var(--space-md)' }}
+                iconEnd={<ArrowRight size={18} />}
               >
                 Enter Demo Workspace
               </Button>
-              <div style={{ textAlign: 'center', marginTop: '6px' }}>
+              <div style={{ textAlign: 'center', marginTop: '8px' }}>
                 <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
                   Instant client-side evaluation with zero credentials required
                 </span>
@@ -170,22 +136,12 @@ export function LoginPage() {
             </div>
 
             {/* Divider */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                margin: 'var(--space-xl) 0',
-                color: 'var(--color-border)',
-                fontSize: 'var(--text-xs)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-              }}
-            >
-              <span style={{ flex: 1, height: '1px', background: 'var(--color-border)' }} />
-              <span style={{ padding: '0 var(--space-sm)', color: 'var(--color-text-muted)' }}>
+            <div className="login-divider">
+              <span className="login-divider-line" />
+              <span className="login-divider-text">
                 Or Sign In with Credentials
               </span>
-              <span style={{ flex: 1, height: '1px', background: 'var(--color-border)' }} />
+              <span className="login-divider-line" />
             </div>
 
             {/* Credential Form */}
@@ -221,8 +177,10 @@ export function LoginPage() {
                       setPassword(e.target.value);
                       if (validationErrors.password) setValidationErrors((prev) => ({ ...prev, password: null }));
                     }}
-                    className="form-input"
+                    className={`form-input ${validationErrors.password ? 'form-input-error' : ''}`}
                     style={{ paddingLeft: '36px', paddingRight: '40px' }}
+                    aria-invalid={!!validationErrors.password}
+                    aria-describedby={validationErrors.password ? 'password-error' : undefined}
                   />
                   <button
                     type="button"
@@ -244,14 +202,16 @@ export function LoginPage() {
                   </button>
                 </div>
                 {validationErrors.password && (
-                  <span className="form-error">{validationErrors.password}</span>
+                  <span id="password-error" className="form-error">{validationErrors.password}</span>
                 )}
               </div>
 
               <Button
                 type="submit"
                 variant="secondary"
-                style={{ width: '100%', marginTop: 'var(--space-xs)' }}
+                size="md"
+                fullWidth
+                style={{ marginTop: 'var(--space-xs)' }}
               >
                 Sign In
               </Button>
@@ -260,7 +220,7 @@ export function LoginPage() {
         </Card>
 
         {/* Security & Provenance Note */}
-        <div style={{ marginTop: 'var(--space-xl)', textAlign: 'center', fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', lineHeight: '1.5' }}>
+        <div className="login-provenance-note">
           <p>
             Demo access is provided for evaluating CodeSentinel AI maintainability intelligence and does not represent secure authentication.
           </p>

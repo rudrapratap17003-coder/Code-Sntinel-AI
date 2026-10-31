@@ -39,16 +39,18 @@ export function LandingPage() {
           <Button
             onClick={handleEnterDemo}
             variant="primary"
-            iconEnd={<ArrowRight size={16} />}
+            size="lg"
+            iconEnd={<ArrowRight size={18} />}
           >
             Enter Demo Workspace
           </Button>
           <Button
-            to={isDemoSession ? ROUTES.FINDINGS : ROUTES.LOGIN}
+            to={isDemoSession ? ROUTES.OVERVIEW : ROUTES.LOGIN}
             variant="secondary"
-            icon={<LogIn size={16} />}
+            size="lg"
+            icon={<LogIn size={18} />}
           >
-            {isDemoSession ? 'Explore Findings' : 'Sign In / Switch'}
+            {isDemoSession ? 'Return to Dashboard' : 'Sign In / Switch'}
           </Button>
         </div>
 

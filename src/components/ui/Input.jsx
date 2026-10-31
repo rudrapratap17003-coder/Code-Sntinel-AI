@@ -14,12 +14,16 @@ export function Input({
   hint,
   error,
   icon,
+  iconEnd,
   id,
   className = '',
   disabled = false,
   ...props
 }) {
-  const inputId = id || (label ? label.toLowerCase().replace(/\s+/g, '-') : undefined);
+  const generatedId = React.useId();
+  const inputId = id || (label ? label.toLowerCase().replace(/\s+/g, '-') : generatedId);
+  const hintId = hint ? `${inputId}-hint` : undefined;
+  const errorId = error ? `${inputId}-error` : undefined;
 
   return (
     <div className={`form-group ${className}`.trim()}>
@@ -30,20 +34,38 @@ export function Input({
       )}
       <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
         {icon && (
-          <span style={{ position: 'absolute', left: '12px', color: 'var(--color-text-muted)', display: 'flex' }}>
+          <span style={{ position: 'absolute', left: '12px', color: 'var(--color-text-muted)', display: 'flex', pointerEvents: 'none' }}>
             {icon}
           </span>
         )}
         <input
           id={inputId}
-          className="form-input"
+          className={`form-input ${error ? 'input-error' : ''}`}
           disabled={disabled}
-          style={{ paddingLeft: icon ? '36px' : undefined }}
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? errorId : hintId}
+          style={{
+            paddingLeft: icon ? '36px' : undefined,
+            paddingRight: iconEnd ? '36px' : undefined,
+          }}
           {...props}
         />
+        {iconEnd && (
+          <span style={{ position: 'absolute', right: '12px', display: 'flex', alignItems: 'center' }}>
+            {iconEnd}
+          </span>
+        )}
       </div>
-      {hint && !error && <span className="form-hint">{hint}</span>}
-      {error && <span className="form-error">{error}</span>}
+      {hint && !error && (
+        <span id={hintId} className="form-hint">
+          {hint}
+        </span>
+      )}
+      {error && (
+        <span id={errorId} className="form-error" role="alert">
+          {error}
+        </span>
+      )}
     </div>
   );
 }

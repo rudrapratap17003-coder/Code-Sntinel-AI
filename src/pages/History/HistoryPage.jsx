@@ -111,6 +111,7 @@ export function HistoryPage() {
     {
       key: 'repository',
       label: 'Repository & Branch',
+      width: '28%',
       render: (_, row) => {
         const isCurrentActive = currentAnalysis?.id === row.id;
         return (
@@ -147,6 +148,7 @@ export function HistoryPage() {
     {
       key: 'timestamp',
       label: 'Timestamp',
+      width: '150px',
       render: (_, row) => (
         <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>
           {row.displayTimestamp || row.repository?.displayTimestamp || 'Timestamp unavailable'}
@@ -167,6 +169,7 @@ export function HistoryPage() {
       key: 'cmdi',
       label: 'CMDI Score',
       align: 'center',
+      width: '110px',
       render: (_, row) => {
         const cmdi = row.summary?.cmdi;
         return (
@@ -183,6 +186,7 @@ export function HistoryPage() {
       key: 'riskCategory',
       label: 'Risk Tier',
       align: 'center',
+      width: '130px',
       render: (_, row) => {
         const cat = row.summary?.riskCategory || 'Moderate Risk';
         const variant = cat.toLowerCase().includes('critical')
@@ -197,6 +201,7 @@ export function HistoryPage() {
       key: 'findingsCount',
       label: 'Findings',
       align: 'center',
+      width: '100px',
       render: (_, row) => (
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>
           {row.findings?.length || row.repository?.findingsCount || 0} issues
@@ -207,6 +212,7 @@ export function HistoryPage() {
       key: 'actions',
       label: 'Actions',
       align: 'right',
+      width: '130px',
       render: (_, row) => {
         const isCurrentActive = currentAnalysis?.id === row.id;
         return (
