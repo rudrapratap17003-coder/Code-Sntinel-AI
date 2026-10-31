@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   History,
@@ -9,6 +9,7 @@ import {
   FolderPlus,
   Sparkles,
   GitBranch,
+  RefreshCw,
 } from 'lucide-react';
 import {
   PageHeader,
@@ -39,7 +40,22 @@ export function HistoryPage() {
     deleteHistoryRecord,
     clearAllHistory,
     resetToSeedHistory,
+    historyError,
+    clearHistoryError,
+    isSyncingHistory,
+    syncBackendHistory,
+    isRestoring,
+    restoringId,
+    analysisMode,
+    backendStatus,
   } = useAnalysis();
+
+  // Synchronize with backend database on mount if operating in live mode with online backend
+  useEffect(() => {
+    if (analysisMode === 'live' && backendStatus === 'online' && syncBackendHistory) {
+      syncBackendHistory();
+    }
+  }, [analysisMode, backendStatus, syncBackendHistory]);
 
   // Search & Sort State
   const [searchTerm, setSearchTerm] = useState('');
@@ -89,15 +105,18 @@ export function HistoryPage() {
     return list;
   }, [filteredRecords, sortBy]);
 
-  const handleOpenAnalysis = (record) => {
-    restoreAnalysis(record);
-    navigate(ROUTES.OVERVIEW);
+  const handleOpenAnalysis = async (record) => {
+    const restored = await restoreAnalysis(record);
+    if (restored) {
+      navigate(ROUTES.OVERVIEW);
+    }
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (deleteTarget) {
-      deleteHistoryRecord(deleteTarget.id);
+      const targetId = deleteTarget.id;
       setDeleteTarget(null);
+      await deleteHistoryRecord(targetId);
     }
   };
 
@@ -223,9 +242,10 @@ export function HistoryPage() {
                 e.stopPropagation();
                 handleOpenAnalysis(row);
               }}
+              disabled={isRestoring}
               style={{ fontSize: '11px', padding: '3px 8px' }}
             >
-              {isCurrentActive ? 'Inspect Active' : 'Restore'}
+              {isRestoring && restoringId === row.id ? 'Loading...' : isCurrentActive ? 'Inspect Active' : 'Restore'}
             </Button>
             <button
               onClick={(e) => {
@@ -261,8 +281,20 @@ export function HistoryPage() {
         icon={<History size={24} />}
         description="Revisit, restore, and compare previous repository technical debt analyses preserved in browser storage."
         actions={
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
-            <Badge variant="demo">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', flexWrap: 'wrap' }}>
+            {analysisMode === 'live' && backendStatus === 'online' && (
+              <Button
+                variant="secondary"
+                icon={<RefreshCw size={13} className={isSyncingHistory ? 'spinning-icon' : ''} />}
+                onClick={() => syncBackendHistory && syncBackendHistory()}
+                disabled={isSyncingHistory}
+                style={{ fontSize: 'var(--text-xs)' }}
+                title="Synchronize history with backend SQLite database"
+              >
+                {isSyncingHistory ? 'Syncing...' : 'Sync Database'}
+              </Button>
+            )}
+            <Badge variant={analysisMode === 'live' ? 'success' : 'demo'}>
               <Sparkles size={11} />
               <span>{historyRecords.length} Saved Runs</span>
             </Badge>
@@ -273,12 +305,39 @@ export function HistoryPage() {
                 onClick={() => setShowClearAllDialog(true)}
                 style={{ fontSize: 'var(--text-xs)' }}
               >
-                Clear History
+                Clear Local
               </Button>
             )}
           </div>
         }
       />
+
+      {/* Synchronization Error Notification */}
+      {historyError && (
+        <div style={{ marginBottom: 'var(--space-md)' }}>
+          <ErrorMessage severity="critical" title="History Synchronization Notice">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-sm)' }}>
+              <span>{historyError}</span>
+              {clearHistoryError && (
+                <button
+                  type="button"
+                  onClick={clearHistoryError}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'inherit',
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                    fontSize: 'var(--text-xs)',
+                  }}
+                >
+                  Dismiss
+                </button>
+              )}
+            </div>
+          </ErrorMessage>
+        </div>
+      )}
 
       {/* Corrupted records recovery notification if any */}
       {corruptedCount > 0 && (
@@ -392,14 +451,15 @@ export function HistoryPage() {
         isDanger={true}
       >
         <p>
-          Are you sure you want to permanently delete the saved demonstration analysis for{' '}
+          Are you sure you want to permanently delete the saved analysis for{' '}
           <strong style={{ color: 'var(--color-text-primary)' }}>
             {deleteTarget?.repository?.name}
-          </strong>{' '}
-          from your browser storage?
+          </strong>?
         </p>
         <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', marginTop: '8px' }}>
-          This action only affects your local client storage.
+          {deleteTarget?.repository?.isDemo
+            ? 'This action will remove the demonstration record from your browser storage.'
+            : 'This action will delete the persisted record from the backend SQLite database and client history.'}
         </p>
       </ConfirmDialog>
 

@@ -9,6 +9,8 @@ import {
   saveHistoryToStorage,
   loadHistoryFromStorage,
   HISTORY_STORAGE_KEY,
+  normalizeBackendSummary,
+  mergeHistoryRecords,
 } from '../src/utils/historyStorage.js';
 import { ROUTES } from '../src/utils/constants.js';
 import {
@@ -886,6 +888,381 @@ await test('OverviewPage component implements all required Part 5 sections in or
   assert(overviewSource.includes('Recommended Next Action'));
   assert(overviewSource.includes('Analyze Repository'));
   assert(overviewSource.includes('ROUTES.REPOSITORY'));
+});
+
+// -------------------------------------------------------------
+// SECTION 10: SQLite Backend History Synchronization
+// -------------------------------------------------------------
+console.log('\n[SECTION 10: SQLite Backend History Synchronization]');
+
+await test('normalizeBackendSummary maps flat snake_case backend summary to nested contract without inventing findings', () => {
+  const backendRow = {
+    id: 'analysis-run-abc12345',
+    timestamp: '2026-10-31T12:00:00Z',
+    display_timestamp: 'Oct 31, 2026 • 12:00 UTC',
+    repository_name: 'pallets/flask',
+    repository_url: 'https://github.com/pallets/flask',
+    cmdi: 38.5,
+    risk_category: 'Moderate Risk',
+    findings_count: 14,
+    files_examined: 28,
+  };
+
+  const normalized = normalizeBackendSummary(backendRow);
+
+  assert.strictEqual(normalized.id, 'analysis-run-abc12345');
+  assert.strictEqual(normalized.timestamp, '2026-10-31T12:00:00Z');
+  assert.strictEqual(normalized.displayTimestamp, 'Oct 31, 2026 • 12:00 UTC');
+  assert.strictEqual(normalized.repository.name, 'pallets/flask');
+  assert.strictEqual(normalized.repository.url, 'https://github.com/pallets/flask');
+  assert.strictEqual(normalized.repository.filesExamined, 28);
+  assert.strictEqual(normalized.repository.findingsCount, 14);
+  assert.strictEqual(normalized.repository.isDemo, false);
+  assert.strictEqual(normalized.repository.modeLabel, 'REAL PYTHON STATIC ANALYSIS');
+  assert.strictEqual(normalized.summary.cmdi, 38.5);
+  assert.strictEqual(normalized.summary.riskCategory, 'Moderate Risk');
+
+  // Verify that findings, hotspots, and architecture data are NOT invented
+  assert.strictEqual(normalized.isSummaryOnly, true);
+  assert.strictEqual(normalized.findings, undefined);
+  assert.strictEqual(normalized.hotspots, undefined);
+  assert.strictEqual(normalized.architecture, undefined);
+
+  // Verify isValidHistoryRecord handles summary records cleanly
+  assert.strictEqual(isValidHistoryRecord(normalized), true);
+});
+
+await test('normalizeBackendSummary correctly handles camelCase fields and missing values', () => {
+  const camelRow = {
+    id: 'analysis-run-camel99',
+    timestamp: '2026-10-31T12:30:00Z',
+    displayTimestamp: 'Oct 31, 2026 • 12:30 UTC',
+    repositoryName: 'django/django',
+    repositoryUrl: 'https://github.com/django/django',
+    cmdi: 78.0,
+    riskCategory: 'Critical Risk',
+    findingsCount: 42,
+    filesExamined: 150,
+  };
+
+  const normalized = normalizeBackendSummary(camelRow);
+
+  assert.strictEqual(normalized.id, 'analysis-run-camel99');
+  assert.strictEqual(normalized.repository.name, 'django/django');
+  assert.strictEqual(normalized.repository.url, 'https://github.com/django/django');
+  assert.strictEqual(normalized.summary.cmdi, 78.0);
+  assert.strictEqual(normalized.summary.riskCategory, 'Critical Risk');
+  assert.strictEqual(normalized.summary.riskSeverity, 'critical');
+  assert.strictEqual(normalized.isSummaryOnly, true);
+});
+
+await test('mergeHistoryRecords deduplicates records by stable ID and enforces chronological sorting', () => {
+  const localList = [
+    {
+      id: 'analysis-run-1',
+      timestamp: '2026-10-30T10:00:00Z',
+      repository: { name: 'owner/repo1', url: 'https://github.com/owner/repo1', isDemo: false },
+      summary: { cmdi: 20 },
+      isSummaryOnly: true,
+    },
+  ];
+
+  const backendList = [
+    {
+      id: 'analysis-run-1', // duplicate ID with newer timestamp
+      timestamp: '2026-10-30T10:05:00Z',
+      display_timestamp: 'Oct 30, 2026 • 10:05 UTC',
+      repository_name: 'owner/repo1',
+      repository_url: 'https://github.com/owner/repo1',
+      cmdi: 22,
+      risk_category: 'Low Risk',
+      findings_count: 3,
+      files_examined: 5,
+    },
+    {
+      id: 'analysis-run-2', // new record
+      timestamp: '2026-10-31T11:00:00Z',
+      display_timestamp: 'Oct 31, 2026 • 11:00 UTC',
+      repository_name: 'owner/repo2',
+      repository_url: 'https://github.com/owner/repo2',
+      cmdi: 45,
+      risk_category: 'Moderate Risk',
+      findings_count: 8,
+      files_examined: 12,
+    },
+  ];
+
+  const merged = mergeHistoryRecords(localList, backendList);
+
+  assert.strictEqual(merged.length, 2);
+  // Chronological sort: newest first
+  assert.strictEqual(merged[0].id, 'analysis-run-2');
+  assert.strictEqual(merged[1].id, 'analysis-run-1');
+});
+
+await test('mergeHistoryRecords enforces precedence: preserves full local report over summary-only backend item', () => {
+  const fullLocalReport = {
+    ...DEMO_ANALYSIS,
+    id: 'analysis-run-persisted-1',
+    timestamp: '2026-10-31T09:00:00Z',
+    repository: { ...DEMO_ANALYSIS.repository, name: 'pallets/flask', isDemo: false },
+    findings: [{ id: 'FIND-001', title: 'Real Finding' }],
+    architecture: { nodes: [{ id: 'mod-1' }], edges: [] },
+    isSummaryOnly: false,
+  };
+
+  const backendSummary = [
+    {
+      id: 'analysis-run-persisted-1',
+      timestamp: '2026-10-31T09:00:00Z',
+      repository_name: 'pallets/flask',
+      repository_url: 'https://github.com/pallets/flask',
+      cmdi: 38.5,
+      risk_category: 'Moderate Risk',
+      findings_count: 1,
+      files_examined: 10,
+    },
+  ];
+
+  const merged = mergeHistoryRecords([fullLocalReport], backendSummary);
+
+  assert.strictEqual(merged.length, 1);
+  const result = merged[0];
+  // Must preserve full findings array and architecture data
+  assert.strictEqual(result.isSummaryOnly, false);
+  assert.strictEqual(Array.isArray(result.findings), true);
+  assert.strictEqual(result.findings.length, 1);
+  assert.strictEqual(result.findings[0].title, 'Real Finding');
+  assert(result.architecture.nodes.length > 0);
+});
+
+await test('mergeHistoryRecords preserves local demo seeds while merging backend records', () => {
+  const seeds = getInitialSeedHistory();
+  const backendSummaries = [
+    {
+      id: 'analysis-run-live-999',
+      timestamp: '2026-10-31T12:00:00Z',
+      display_timestamp: 'Oct 31, 2026 • 12:00 UTC',
+      repository_name: 'psf/requests',
+      repository_url: 'https://github.com/psf/requests',
+      cmdi: 15.0,
+      risk_category: 'Low Risk',
+      findings_count: 2,
+      files_examined: 8,
+    },
+  ];
+
+  const merged = mergeHistoryRecords(seeds, backendSummaries);
+
+  // Both demo seeds and the new live run must exist
+  assert.strictEqual(merged.length, 3);
+  assert(merged.some(r => r.id === 'analysis-seed-001'));
+  assert(merged.some(r => r.id === 'analysis-seed-002'));
+  assert(merged.some(r => r.id === 'analysis-run-live-999'));
+  // Live run is newest, should be first
+  assert.strictEqual(merged[0].id, 'analysis-run-live-999');
+});
+
+await test('apiClient.getAnalyses retrieves backend history summaries', async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async (url) => {
+    assert(url.includes('/analyses'));
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: () => 'application/json' },
+      text: async () =>
+        JSON.stringify([
+          {
+            id: 'analysis-run-test-1',
+            timestamp: '2026-10-31T10:00:00Z',
+            display_timestamp: 'Oct 31, 2026 • 10:00 UTC',
+            repository_name: 'test/repo',
+            repository_url: 'https://github.com/test/repo',
+            cmdi: 25.0,
+            risk_category: 'Low Risk',
+            findings_count: 3,
+            files_examined: 5,
+          },
+        ]),
+    };
+  };
+
+  try {
+    const list = await apiClient.getAnalyses();
+    assert.strictEqual(Array.isArray(list), true);
+    assert.strictEqual(list.length, 1);
+    assert.strictEqual(list[0].id, 'analysis-run-test-1');
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+await test('Restoring a summary-only record retrieves full report via apiClient.getAnalysisById', async () => {
+  const originalFetch = global.fetch;
+  let requestedId = null;
+
+  global.fetch = async (url) => {
+    if (url.includes('/analyses/analysis-run-fetch-full')) {
+      requestedId = 'analysis-run-fetch-full';
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        text: async () =>
+          JSON.stringify({
+            id: 'analysis-run-fetch-full',
+            timestamp: '2026-10-31T10:00:00Z',
+            display_timestamp: 'Oct 31, 2026 • 10:00 UTC',
+            repository: {
+              name: 'test/full-repo',
+              url: 'https://github.com/test/full-repo',
+              branch: 'main',
+              files_examined: 10,
+              lines_of_code: 500,
+              status: 'Analyzed',
+              is_demo: false,
+              mode_label: 'REAL PYTHON STATIC ANALYSIS',
+            },
+            summary: {
+              cmdi: 42.0,
+              risk_category: 'Moderate Risk',
+              risk_severity: 'info',
+              interpretation: 'Computed from AST.',
+              scoring_disclaimer: 'Disclaimer',
+              remediation_estimate_hours: 12,
+              formula_description: 'Formula',
+            },
+            indicators: [{ id: 'complexity', name: 'Complexity', normalized_risk: 30, contribution: 7.5 }],
+            findings: [
+              {
+                id: 'FIND-PY-001',
+                title: 'High Complexity',
+                rule_id: 'complexity/high',
+                category: 'Cyclomatic Complexity',
+                severity: 'high',
+                file: 'app.py',
+                line_range: 'lines 10–30',
+                summary: 'Branching logic',
+                detailed_explanation: 'Full details',
+                evidence: { type: 'METRIC_THRESHOLD' },
+                maintainability_impact: 'Impact',
+                recommended_remediation: 'Refactor',
+                origin: 'STATIC_ANALYSIS (AST)',
+              },
+            ],
+            priority_findings: [],
+            hotspots: [],
+            architecture: { metrics: {}, nodes: [], edges: [] },
+          }),
+      };
+    }
+    throw new Error(`Unexpected fetch URL: ${url}`);
+  };
+
+  try {
+    const fullReport = await apiClient.getAnalysisById('analysis-run-fetch-full');
+    assert.strictEqual(requestedId, 'analysis-run-fetch-full');
+    assert.strictEqual(fullReport.id, 'analysis-run-fetch-full');
+    assert.strictEqual(fullReport.repository.name, 'test/full-repo');
+    assert.strictEqual(fullReport.findings.length, 1);
+    assert.strictEqual(fullReport.findings[0].id, 'FIND-PY-001');
+    assert.strictEqual(Boolean(fullReport.isSummaryOnly), false);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+await test('Restoring a summary-only record handles backend failure gracefully', async () => {
+  const originalFetch = global.fetch;
+
+  global.fetch = async () => {
+    return {
+      ok: false,
+      status: 404,
+      headers: { get: () => 'application/json' },
+      text: async () => JSON.stringify({ detail: 'Analysis not found' }),
+    };
+  };
+
+  try {
+    await assert.rejects(
+      async () => apiClient.getAnalysisById('nonexistent-id'),
+      (err) => {
+        assert(err instanceof ApiError);
+        assert.strictEqual(err.status, 404);
+        return true;
+      }
+    );
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+await test('Deleting a live backend record synchronizes with apiClient.deleteAnalysis and handles errors', async () => {
+  const originalFetch = global.fetch;
+  let deletedId = null;
+
+  // Test successful deletion
+  global.fetch = async (url, options) => {
+    assert.strictEqual(options.method, 'DELETE');
+    deletedId = url.split('/').pop();
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: () => 'application/json' },
+      text: async () => JSON.stringify({ status: 'deleted', id: deletedId }),
+    };
+  };
+
+  try {
+    const res = await apiClient.deleteAnalysis('analysis-run-to-delete');
+    assert.strictEqual(deletedId, 'analysis-run-to-delete');
+    assert.strictEqual(res.status, 'deleted');
+
+    // Test failure scenario: server returns 500
+    global.fetch = async () => ({
+      ok: false,
+      status: 500,
+      headers: { get: () => 'application/json' },
+      text: async () => JSON.stringify({ detail: 'Database error' }),
+    });
+
+    await assert.rejects(
+      async () => apiClient.deleteAnalysis('analysis-run-fail'),
+      (err) => {
+        assert(err instanceof ApiError);
+        assert.strictEqual(err.status, 500);
+        return true;
+      }
+    );
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+await test('Offline fallback preserves localStorage history without deletion on backend downtime', () => {
+  let storageMap = {};
+  global.window = {
+    localStorage: {
+      getItem: (key) => storageMap[key] || null,
+      setItem: (key, val) => { storageMap[key] = String(val); },
+      removeItem: (key) => { delete storageMap[key]; },
+    },
+  };
+
+  // Pre-seed storage with records
+  const initialSeeds = getInitialSeedHistory();
+  saveHistoryToStorage(initialSeeds);
+
+  // Simulate offline: merge with empty backend list
+  const loaded = loadHistoryFromStorage();
+  const merged = mergeHistoryRecords(loaded.records, []);
+
+  // Records must be preserved completely
+  assert.strictEqual(merged.length, 2);
+  assert.strictEqual(merged[0].id, initialSeeds[0].id);
+  assert.strictEqual(merged[1].id, initialSeeds[1].id);
 });
 
 console.log('\n================================================================');
