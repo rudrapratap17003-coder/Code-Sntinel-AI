@@ -292,7 +292,7 @@
 
 .form-input:focus, .form-select:focus {
   border-color: var(--color-accent-primary);
-  box-shadow: 0 0 0 1px var(--color-accent-primary);
+  box-shadow: var(--focus-ring);
 }
 
 .form-input::placeholder {
@@ -492,12 +492,14 @@
   position: fixed;
   inset: 0;
   background-color: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(2px);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: var(--space-md);
   z-index: 1000;
+  animation: overlayFadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .modal-dialog {
@@ -507,19 +509,8 @@
   width: 100%;
   max-width: 480px;
   overflow: hidden;
-  box-shadow: var(--shadow-lg);
-  animation: modalIn 0.2s ease-out;
-}
-
-@keyframes modalIn {
-  from {
-    opacity: 0;
-    transform: scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
+  box-shadow: var(--shadow-xl);
+  animation: modalScaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .modal-header {
@@ -809,11 +800,23 @@
   flex-direction: column;
   justify-content: space-between;
   gap: var(--space-md);
-  transition: border-color var(--transition-fast);
+  transition: transform var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .indicator-card:hover {
-  border-color: rgba(38, 53, 44, 0.9);
+  transform: translateY(-2px);
+  border-color: rgba(0, 245, 160, 0.35);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35), 0 0 10px rgba(0, 245, 160, 0.05);
+}
+
+.interactive-indicator-card {
+  transition: transform var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast) !important;
+}
+
+.interactive-indicator-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(0, 245, 160, 0.4) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 12px rgba(0, 245, 160, 0.08) !important;
 }
 
 .indicator-top {
@@ -1087,11 +1090,7 @@
   }
 }
 
-/* Modal and Dropdown Motion */
-.modal-overlay {
-  animation: overlayFadeIn 0.18s ease-out both;
-}
-
+/* Modal and Dropdown Motion Keyframes */
 @keyframes overlayFadeIn {
   from {
     opacity: 0;
@@ -1099,10 +1098,6 @@
   to {
     opacity: 1;
   }
-}
-
-.modal-dialog {
-  animation: modalScaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 @keyframes modalScaleIn {

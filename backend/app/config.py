@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 
 
 def _safe_int(env_val: Optional[str], default: int) -> int:
@@ -99,6 +99,19 @@ ANALYSIS_TIMEOUT_SECONDS = _safe_int(os.getenv("ANALYSIS_TIMEOUT_SECONDS"), 60) 
 MAX_EXTRACTED_SIZE_MB = _safe_int(os.getenv("MAX_EXTRACTED_SIZE_MB"), 150)       # 150 MB max decompressed archive size
 MAX_EXTRACTED_FILES = _safe_int(os.getenv("MAX_EXTRACTED_FILES"), 2500)          # Maximum total files inside extracted archive
 MAX_DIRECTORY_DEPTH = _safe_int(os.getenv("MAX_DIRECTORY_DEPTH"), 25)            # Maximum directory nesting depth
+
+# HTTP Body & Concurrency Caps (Abuse Prevention)
+MAX_REQUEST_BODY_BYTES = _safe_int(os.getenv("MAX_REQUEST_BODY_BYTES"), 5_242_880) # 5 MB max HTTP request payload
+MAX_CONCURRENT_ANALYSES = _safe_int(os.getenv("MAX_CONCURRENT_ANALYSES"), 3)      # Max in-flight analysis tasks
+RATE_LIMIT_ANALYZE_PER_MINUTE = _safe_int(os.getenv("RATE_LIMIT_ANALYZE_PER_MINUTE"), 15) # Per-client analyze rate limit
+RATE_LIMIT_EXPLAIN_PER_MINUTE = _safe_int(os.getenv("RATE_LIMIT_EXPLAIN_PER_MINUTE"), 45) # Per-client explain rate limit
+
+# Production Security & Documentation Controls
+ENABLE_DOCS = os.getenv("ENABLE_DOCS", "false" if IS_PRODUCTION else "true").strip().lower() in ("true", "1", "yes")
+
+# Optional Shared Secret Authentication (for shared/cloud server deployments)
+API_KEY_AUTH_ENABLED = os.getenv("API_KEY_AUTH_ENABLED", "false").strip().lower() in ("true", "1", "yes")
+CODESENTINEL_API_KEY = os.getenv("CODESENTINEL_API_KEY", "").strip() or None
 
 # Analysis Thresholds
 COMPLEXITY_CRITICAL_THRESHOLD = _safe_int(os.getenv("COMPLEXITY_CRITICAL_THRESHOLD"), 25) # McCabe complexity >= 25 is Critical

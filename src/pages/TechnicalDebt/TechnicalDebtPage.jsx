@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Flame,
@@ -77,8 +77,23 @@ export function TechnicalDebtPage() {
     );
   }
 
-  const { repository, summary, indicators, investigationQueue, hotspots } = currentAnalysis;
-  const currentTier = getCmdiTier(summary.cmdi);
+  const { repository, summary, indicators = [], investigationQueue = [], hotspots = [] } = currentAnalysis;
+  const isScoreAvailable = summary.scoreAvailable !== false && summary.score_available !== false && summary.cmdi !== null && summary.riskCategory !== 'Not Available' && summary.risk_category !== 'Not Available';
+  const currentTier = isScoreAvailable ? getCmdiTier(summary.cmdi) : getCmdiTier(null);
+  const availableIndicatorsCount = indicators.filter((ind) => ind.normalizedRisk !== null && ind.normalizedRisk !== undefined).length;
+
+  // Identify primary risk driver: the available indicator with highest normalizedRisk
+  const primaryRiskDriverId = useMemo(() => {
+    let topId = null;
+    let maxRisk = -1;
+    indicators.forEach((ind) => {
+      if (typeof ind.normalizedRisk === 'number' && ind.normalizedRisk > maxRisk && ind.normalizedRisk > 0) {
+        maxRisk = ind.normalizedRisk;
+        topId = ind.id;
+      }
+    });
+    return topId;
+  }, [indicators]);
 
   const indicatorIcons = {
     complexity: <Activity size={18} color="var(--color-severity-critical)" />,
@@ -143,20 +158,36 @@ export function TechnicalDebtPage() {
               </div>
 
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-sm)', marginBottom: 'var(--space-xs)' }}>
-                <span
-                  style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: '3.75rem',
-                    fontWeight: 'var(--font-bold)',
-                    color: 'var(--color-text-primary)',
-                    lineHeight: 1,
-                  }}
-                >
-                  {summary.cmdi}
-                </span>
-                <span style={{ fontSize: 'var(--text-lg)', color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>
-                  / 100
-                </span>
+                {isScoreAvailable ? (
+                  <>
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '3.75rem',
+                        fontWeight: 'var(--font-bold)',
+                        color: 'var(--color-text-primary)',
+                        lineHeight: 1,
+                      }}
+                    >
+                      {typeof summary.cmdi === 'number' ? summary.cmdi.toFixed(1) : summary.cmdi}
+                    </span>
+                    <span style={{ fontSize: 'var(--text-lg)', color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>
+                      / 100
+                    </span>
+                  </>
+                ) : (
+                  <span
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '2.25rem',
+                      fontWeight: 'var(--font-bold)',
+                      color: 'var(--color-text-muted)',
+                      lineHeight: 1,
+                    }}
+                  >
+                    Not Available
+                  </span>
+                )}
                 <span
                   style={{
                     fontSize: 'var(--text-xs)',
@@ -210,8 +241,8 @@ export function TechnicalDebtPage() {
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>Active Indicators:</span>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', color: 'var(--color-accent-primary)' }}>
-                  4 of 4 Evaluated (100%)
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', color: isScoreAvailable ? 'var(--color-accent-primary)' : 'var(--color-text-muted)' }}>
+                  {availableIndicatorsCount} of {indicators.length} Evaluated ({Math.round((availableIndicatorsCount / (indicators.length || 1)) * 100)}%)
                 </span>
               </div>
 
@@ -233,7 +264,7 @@ export function TechnicalDebtPage() {
                 Risk Tier Scale
               </span>
               <span style={{ fontSize: 'var(--text-xs)', fontFamily: 'var(--font-mono)', color: currentTier.color }}>
-                Current Score: {summary.cmdi} ({currentTier.label})
+                Current Score: {isScoreAvailable ? `${typeof summary.cmdi === 'number' ? summary.cmdi.toFixed(1) : summary.cmdi} (${currentTier.label})` : 'Not Available'}
               </span>
             </div>
 
@@ -247,21 +278,27 @@ export function TechnicalDebtPage() {
 
             {/* Needle indicator */}
             <div style={{ position: 'relative', height: '18px', marginTop: '2px' }}>
-              <div
-                style={{
-                  position: 'absolute',
-                  left: `${summary.cmdi}%`,
-                  transform: 'translateX(-50%)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                }}
-              >
-                <div style={{ width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderBottom: `6px solid ${currentTier.color}` }} />
-                <span style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', color: currentTier.color, fontWeight: 'bold' }}>
-                  ▲ {summary.cmdi}
-                </span>
-              </div>
+              {isScoreAvailable ? (
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: `${summary.cmdi}%`,
+                    transform: 'translateX(-50%)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                  }}
+                >
+                  <div style={{ width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderBottom: `6px solid ${currentTier.color}` }} />
+                  <span style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', color: currentTier.color, fontWeight: 'bold' }}>
+                    ▲ {typeof summary.cmdi === 'number' ? summary.cmdi.toFixed(1) : summary.cmdi}
+                  </span>
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', fontSize: '10px', fontFamily: 'var(--font-mono)', color: 'var(--color-text-muted)' }}>
+                  Meter disabled: insufficient metric data to evaluate maintainability tier.
+                </div>
+              )}
             </div>
 
             {/* Scale Legends */}
@@ -306,68 +343,89 @@ export function TechnicalDebtPage() {
             gap: 'var(--space-md)',
           }}
         >
-          {indicators.map((ind) => (
-            <Card
-              key={ind.id}
-              elevated
-              onClick={() => setSelectedIndicator(ind)}
-              style={{
-                cursor: 'pointer',
-                transition: 'border-color var(--transition-fast), transform var(--transition-fast)',
-              }}
-              className="interactive-indicator-card"
-            >
-              <CardBody style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 'var(--space-sm)' }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-xs)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      {indicatorIcons[ind.id]}
-                      <span style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
-                        {ind.name}
-                      </span>
+          {indicators.map((ind) => {
+            const isAvailable = ind.normalizedRisk !== null && ind.normalizedRisk !== undefined;
+            const isPrimaryDriver = ind.id === primaryRiskDriverId;
+
+            return (
+              <Card
+                key={ind.id}
+                elevated
+                onClick={() => setSelectedIndicator(ind)}
+                style={{
+                  cursor: 'pointer',
+                  opacity: isAvailable ? 1 : 0.75,
+                  borderStyle: isAvailable ? 'solid' : 'dashed',
+                  borderColor: isPrimaryDriver ? 'rgba(255, 93, 104, 0.6)' : undefined,
+                  transition: 'border-color var(--transition-fast), transform var(--transition-fast)',
+                }}
+                className="interactive-indicator-card"
+              >
+                <CardBody style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 'var(--space-sm)' }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-xs)', gap: '4px', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {indicatorIcons[ind.id]}
+                        <span style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
+                          {ind.name}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        {isPrimaryDriver && (
+                          <Badge variant="critical" style={{ fontSize: '9px', padding: '1px 5px' }}>
+                            TOP DRIVER
+                          </Badge>
+                        )}
+                        <Badge variant={isAvailable ? ind.severity : 'default'}>
+                          {isAvailable ? ind.severity.toUpperCase() : 'NOT MEASURED'}
+                        </Badge>
+                      </div>
                     </div>
-                    <Badge variant={ind.severity}>
-                      {ind.severity.toUpperCase()}
-                    </Badge>
+
+                    {/* Raw measurement vs Normalized Risk */}
+                    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 'var(--space-xs)' }}>
+                      <div>
+                        <div style={{ fontSize: '10px', textTransform: 'uppercase', color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>
+                          Raw Measurement
+                        </div>
+                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
+                          {isAvailable ? (ind.rawMetric || '0') : 'Not available'}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: '10px', textTransform: 'uppercase', color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>
+                          Risk Sub-Score
+                        </div>
+                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: isAvailable ? (isPrimaryDriver ? 'var(--color-severity-critical)' : 'var(--color-text-primary)') : 'var(--color-text-muted)' }}>
+                          {isAvailable ? (
+                            <>
+                              {ind.normalizedRisk} <span style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>/ 100</span>
+                            </>
+                          ) : (
+                            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)' }}>Not available</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', lineHeight: '1.4', marginTop: 'var(--space-xs)' }}>
+                      {ind.interpretation}
+                    </p>
                   </div>
 
-                  {/* Raw measurement vs Normalized Risk */}
-                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 'var(--space-xs)' }}>
-                    <div>
-                      <div style={{ fontSize: '10px', textTransform: 'uppercase', color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>
-                        Raw Measurement
-                      </div>
-                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-                        {ind.rawMetric}
-                      </div>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: '10px', textTransform: 'uppercase', color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>
-                        Risk Sub-Score
-                      </div>
-                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-severity-critical)' }}>
-                        {ind.normalizedRisk} <span style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>/ 100</span>
-                      </div>
-                    </div>
+                  <div style={{ borderTop: '1px solid var(--color-border-subtle)', paddingTop: 'var(--space-sm)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: isAvailable ? 'var(--color-accent-primary)' : 'var(--color-text-muted)' }}>
+                      {isAvailable ? `+${ind.contribution} pts to CMDI` : 'Excluded from CMDI'}
+                    </span>
+                    <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                      <span>Explain</span>
+                      <ChevronRight size={12} />
+                    </span>
                   </div>
-
-                  <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', lineHeight: '1.4', marginTop: 'var(--space-xs)' }}>
-                    {ind.interpretation}
-                  </p>
-                </div>
-
-                <div style={{ borderTop: '1px solid var(--color-border-subtle)', paddingTop: 'var(--space-sm)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'var(--color-accent-primary)' }}>
-                    +{ind.contribution} pts to CMDI
-                  </span>
-                  <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
-                    <span>Explain</span>
-                    <ChevronRight size={12} />
-                  </span>
-                </div>
-              </CardBody>
-            </Card>
-          ))}
+                </CardBody>
+              </Card>
+            );
+          })}
         </div>
       </div>
 
@@ -381,34 +439,57 @@ export function TechnicalDebtPage() {
           />
           <CardBody>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
-              {indicators.map((ind) => {
-                const percentOfTotal = Math.round((ind.contribution / summary.cmdi) * 100);
-                return (
-                  <div key={ind.id}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-xs)', marginBottom: '4px' }}>
-                      <span style={{ color: 'var(--color-text-primary)', fontWeight: 'var(--font-medium)' }}>
-                        {ind.name}
-                      </span>
-                      <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-text-muted)' }}>
-                        +{ind.contribution} pts ({percentOfTotal}%)
-                      </span>
+              {!isScoreAvailable ? (
+                <div style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-xs)', padding: 'var(--space-md) 0', textAlign: 'center' }}>
+                  No measurable indicators available. Contribution percentages cannot be calculated.
+                </div>
+              ) : (
+                indicators.map((ind) => {
+                  const isAvailable = ind.normalizedRisk !== null && ind.normalizedRisk !== undefined;
+                  const percentOfTotal = (isAvailable && summary?.cmdi && summary.cmdi > 0)
+                    ? Math.round((ind.contribution / summary.cmdi) * 100)
+                    : 0;
+
+                  return (
+                    <div key={ind.id}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-xs)', marginBottom: '4px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ color: isAvailable ? 'var(--color-text-primary)' : 'var(--color-text-muted)', fontWeight: isAvailable ? 'var(--font-medium)' : 'normal' }}>
+                            {ind.name}
+                          </span>
+                          {ind.id === primaryRiskDriverId && (
+                            <Badge variant="critical" style={{ fontSize: '9px', padding: '1px 5px' }}>Top Driver</Badge>
+                          )}
+                        </div>
+                        <span style={{ fontFamily: 'var(--font-mono)', color: isAvailable ? 'var(--color-text-primary)' : 'var(--color-text-muted)' }}>
+                          {isAvailable ? `+${ind.contribution} pts (${percentOfTotal}%)` : 'Not available'}
+                        </span>
+                      </div>
+                      <div className="progress-container" style={{ margin: 0, height: '6px' }}>
+                        <div
+                          className="progress-fill"
+                          style={{
+                            width: `${percentOfTotal}%`,
+                            background: !isAvailable
+                              ? 'transparent'
+                              : ind.severity === 'critical'
+                              ? 'var(--color-severity-critical)'
+                              : ind.severity === 'high'
+                              ? 'var(--color-severity-warning)'
+                              : 'var(--color-accent-primary)',
+                          }}
+                        />
+                      </div>
                     </div>
-                    <div className="progress-container" style={{ margin: 0, height: '6px' }}>
-                      <div
-                        className="progress-fill"
-                        style={{
-                          width: `${percentOfTotal}%`,
-                          background: ind.severity === 'critical' ? 'var(--color-severity-critical)' : 'var(--color-severity-medium)',
-                        }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
 
               <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-sm)', display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-xs)', fontFamily: 'var(--font-mono)' }}>
                 <span>Total Composite Debt (CMDI):</span>
-                <strong style={{ color: 'var(--color-text-primary)' }}>64.5 / 100</strong>
+                <strong style={{ color: 'var(--color-text-primary)' }}>
+                  {isScoreAvailable && typeof summary?.cmdi === 'number' ? `${summary.cmdi.toFixed(1)} / 100` : 'Not Available'}
+                </strong>
               </div>
             </div>
           </CardBody>
@@ -433,7 +514,7 @@ export function TechnicalDebtPage() {
                   textAlign: 'center',
                 }}
               >
-                CMDI = (0.25 × R_comp) + (0.25 × R_dupl) + (0.25 × R_coup) + (0.25 × R_error)
+                {summary?.breakdown?.formula_expression || summary?.formulaDescription || 'CMDI = (0.25 × R_comp) + (0.25 × R_dupl) + (0.25 × R_coup) + (0.25 × R_error)'}
               </div>
 
               <p style={{ color: 'var(--color-text-muted)', lineHeight: '1.5' }}>
@@ -445,7 +526,7 @@ export function TechnicalDebtPage() {
                 <ul style={{ paddingLeft: 'var(--space-md)', marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
                   <li>Complexity: McCabe &le; 10 = 0 risk; McCabe &ge; 40 = 100 risk.</li>
                   <li>Duplication: 0% = 0 risk; &ge; 25% duplicate lines = 100 risk.</li>
-                  <li>Coupling: Normalized direct import instabillity factor (0–100).</li>
+                  <li>Coupling: Normalized direct import instability factor (0–100).</li>
                   <li>Error Handling: Heuristic defensive penalty inverted from adherence.</li>
                 </ul>
               </div>
@@ -462,7 +543,7 @@ export function TechnicalDebtPage() {
               Prioritized Remediation Queue
             </h2>
             <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', marginTop: '2px' }}>
-              Recommended investigation order based on complexity × churn velocity and architectural blast radius.
+              Recommended investigation order based on complexity × volatility velocity and architectural blast radius.
             </p>
           </div>
           <Badge variant="demo">WHAT TO FIX FIRST</Badge>

@@ -31,9 +31,10 @@ export function isValidHistoryRecord(record) {
   if (typeof record.repository.name !== 'string' || !record.repository.name.trim()) return false;
   if (typeof record.repository.url !== 'string' || !record.repository.url.trim()) return false;
 
-  // Validate summary & CMDI
+  // Validate summary & CMDI (allows explicit null for Not Available states)
   if (!record.summary || typeof record.summary !== 'object') return false;
-  if (typeof record.summary.cmdi !== 'number' || isNaN(record.summary.cmdi)) return false;
+  const cmdiVal = record.summary.cmdi;
+  if (cmdiVal !== null && (typeof cmdiVal !== 'number' || isNaN(cmdiVal))) return false;
 
   // Summary-only backend records are valid without indicators and findings collections
   if (record.isSummaryOnly) {

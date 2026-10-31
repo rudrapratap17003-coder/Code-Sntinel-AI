@@ -10,6 +10,9 @@ import {
   Sparkles,
   GitBranch,
   RefreshCw,
+  AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import {
   PageHeader,
@@ -40,30 +43,29 @@ export function HistoryPage() {
     deleteHistoryRecord,
     clearAllHistory,
     resetToSeedHistory,
-    historyError,
-    clearHistoryError,
-    isSyncingHistory,
     syncBackendHistory,
-    isRestoring,
-    restoringId,
-    analysisMode,
-    backendStatus,
+    isSyncingHistory,
+    syncError,
   } = useAnalysis();
-
-  // Synchronize with backend database on mount if operating in live mode with online backend
-  useEffect(() => {
-    if (analysisMode === 'live' && backendStatus === 'online' && syncBackendHistory) {
-      syncBackendHistory();
-    }
-  }, [analysisMode, backendStatus, syncBackendHistory]);
 
   // Search & Sort State
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('timestamp-desc');
+  const [openingId, setOpeningId] = useState(null);
+  const [deletionError, setDeletionError] = useState(null);
 
   // Deletion Confirmation Dialog State
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [showClearAllDialog, setShowClearAllDialog] = useState(false);
+
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  // Reset page when filter or sort changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, sortBy]);
 
   // 1. Filter by Search Query
   const filteredRecords = useMemo(() => {
@@ -105,18 +107,32 @@ export function HistoryPage() {
     return list;
   }, [filteredRecords, sortBy]);
 
+  // 3. Paginate Records
+  const totalItems = sortedRecords.length;
+  const totalPages = Math.ceil(totalItems / pageSize) || 1;
+  const paginatedRecords = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return sortedRecords.slice(start, start + pageSize);
+  }, [sortedRecords, currentPage, pageSize]);
+
   const handleOpenAnalysis = async (record) => {
-    const restored = await restoreAnalysis(record);
-    if (restored) {
+    setOpeningId(record.id);
+    try {
+      await restoreAnalysis(record);
       navigate(ROUTES.OVERVIEW);
+    } finally {
+      setOpeningId(null);
     }
   };
 
   const handleConfirmDelete = async () => {
     if (deleteTarget) {
-      const targetId = deleteTarget.id;
+      setDeletionError(null);
+      const res = await deleteHistoryRecord(deleteTarget.id);
+      if (res && res.error) {
+        setDeletionError(res.error);
+      }
       setDeleteTarget(null);
-      await deleteHistoryRecord(targetId);
     }
   };
 
@@ -180,7 +196,7 @@ export function HistoryPage() {
       width: '130px',
       render: (_, row) => (
         <Badge variant={row.repository?.isDemo ? 'demo' : 'success'}>
-          {row.repository?.modeLabel || 'DEMO ANALYSIS'}
+          {row.repository?.modeLabel || (row.repository?.isDemo ? 'DEMO ANALYSIS' : 'REAL ANALYSIS')}
         </Badge>
       ),
     },
@@ -188,13 +204,23 @@ export function HistoryPage() {
       key: 'cmdi',
       label: 'CMDI Score',
       align: 'center',
-      width: '110px',
+      width: '120px',
       render: (_, row) => {
-        const cmdi = row.summary?.cmdi;
+        const isAvailable = row.summary?.scoreAvailable !== false && row.summary?.score_available !== false && row.summary?.cmdi !== null && row.summary?.riskCategory !== 'Not Available' && row.summary?.risk_category !== 'Not Available';
+        const cmdi = isAvailable && typeof row.summary?.cmdi === 'number' ? row.summary.cmdi : null;
+
+        if (cmdi === null) {
+          return (
+            <Badge variant="default" style={{ fontSize: '10px' }}>
+              Not Available
+            </Badge>
+          );
+        }
+
         return (
           <div style={{ fontFamily: 'var(--font-mono)' }}>
             <strong style={{ color: 'var(--color-text-primary)', fontSize: 'var(--text-base)' }}>
-              {cmdi}
+              {cmdi.toFixed(1)}
             </strong>
             <span style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}> / 100</span>
           </div>
@@ -207,45 +233,47 @@ export function HistoryPage() {
       align: 'center',
       width: '130px',
       render: (_, row) => {
-        const cat = row.summary?.riskCategory || 'Moderate Risk';
-        const variant = cat.toLowerCase().includes('critical')
-          ? 'critical'
-          : cat.toLowerCase().includes('high')
-          ? 'medium'
-          : 'info';
+        const cat = row.summary?.riskCategory || row.summary?.risk_category || 'Low Risk';
+        let variant = 'info';
+        if (cat === 'Not Available') variant = 'default';
+        else if (cat.toLowerCase().includes('critical')) variant = 'critical';
+        else if (cat.toLowerCase().includes('high')) variant = 'medium';
+        else if (cat.toLowerCase().includes('moderate')) variant = 'info';
+        else if (cat.toLowerCase().includes('low')) variant = 'success';
         return <Badge variant={variant}>{cat}</Badge>;
       },
     },
     {
       key: 'findingsCount',
-      label: 'Findings',
+      label: 'Issues',
       align: 'center',
-      width: '100px',
-      render: (_, row) => (
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>
-          {row.findings?.length || row.repository?.findingsCount || 0} issues
-        </span>
-      ),
+      width: '90px',
+      render: (_, row) => {
+        const count = row.repository?.findingsCount ?? row.findings?.length ?? 0;
+        return (
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>
+            {count}
+          </span>
+        );
+      },
     },
     {
       key: 'actions',
       label: 'Actions',
       align: 'right',
-      width: '130px',
+      width: '140px',
       render: (_, row) => {
-        const isCurrentActive = currentAnalysis?.id === row.id;
+        const isOpening = openingId === row.id;
         return (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 'var(--space-xs)' }}>
+          <div style={{ display: 'flex', gap: 'var(--space-xs)', justifyContent: 'flex-end', alignItems: 'center' }}>
             <Button
-              variant={isCurrentActive ? 'secondary' : 'primary'}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleOpenAnalysis(row);
-              }}
-              disabled={isRestoring}
+              variant="secondary"
+              onClick={() => handleOpenAnalysis(row)}
+              disabled={isOpening}
               style={{ fontSize: '11px', padding: '3px 8px' }}
+              icon={isOpening ? <RefreshCw size={11} className="spinning-icon" /> : <Play size={11} />}
             >
-              {isRestoring && restoringId === row.id ? 'Loading...' : isCurrentActive ? 'Inspect Active' : 'Restore'}
+              {isOpening ? 'Loading...' : 'Open'}
             </Button>
             <button
               onClick={(e) => {
@@ -279,25 +307,23 @@ export function HistoryPage() {
       <PageHeader
         title="Analysis History"
         icon={<History size={24} />}
-        description="Revisit, restore, and compare previous repository technical debt analyses preserved in browser storage."
+        description="Revisit, restore, and compare previous repository technical debt analyses preserved in browser storage and backend database."
         actions={
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', flexWrap: 'wrap' }}>
-            {analysisMode === 'live' && backendStatus === 'online' && (
-              <Button
-                variant="secondary"
-                icon={<RefreshCw size={13} className={isSyncingHistory ? 'spinning-icon' : ''} />}
-                onClick={() => syncBackendHistory && syncBackendHistory()}
-                disabled={isSyncingHistory}
-                style={{ fontSize: 'var(--text-xs)' }}
-                title="Synchronize history with backend SQLite database"
-              >
-                {isSyncingHistory ? 'Syncing...' : 'Sync Database'}
-              </Button>
-            )}
-            <Badge variant={analysisMode === 'live' ? 'success' : 'demo'}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+            <Badge variant="demo">
               <Sparkles size={11} />
               <span>{historyRecords.length} Saved Runs</span>
             </Badge>
+            <Button
+              variant="secondary"
+              icon={<RefreshCw size={12} className={isSyncingHistory ? 'spinning-icon' : ''} />}
+              onClick={syncBackendHistory}
+              disabled={isSyncingHistory}
+              style={{ fontSize: 'var(--text-xs)' }}
+              title="Sync historical analysis records from SQLite database"
+            >
+              {isSyncingHistory ? 'Syncing...' : 'Sync Database'}
+            </Button>
             {historyRecords.length > 0 && (
               <Button
                 variant="secondary"
@@ -305,36 +331,26 @@ export function HistoryPage() {
                 onClick={() => setShowClearAllDialog(true)}
                 style={{ fontSize: 'var(--text-xs)' }}
               >
-                Clear Local
+                Clear History
               </Button>
             )}
           </div>
         }
       />
 
-      {/* Synchronization Error Notification */}
-      {historyError && (
+      {/* Sync or Deletion Error Notices */}
+      {syncError && (
         <div style={{ marginBottom: 'var(--space-md)' }}>
-          <ErrorMessage severity="critical" title="History Synchronization Notice">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-sm)' }}>
-              <span>{historyError}</span>
-              {clearHistoryError && (
-                <button
-                  type="button"
-                  onClick={clearHistoryError}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'inherit',
-                    cursor: 'pointer',
-                    textDecoration: 'underline',
-                    fontSize: 'var(--text-xs)',
-                  }}
-                >
-                  Dismiss
-                </button>
-              )}
-            </div>
+          <ErrorMessage severity="medium" title="Database Sync Notice">
+            {syncError} (Local storage history records remain fully accessible).
+          </ErrorMessage>
+        </div>
+      )}
+
+      {deletionError && (
+        <div style={{ marginBottom: 'var(--space-md)' }}>
+          <ErrorMessage severity="medium" title="Removal Notice">
+            {deletionError}
           </ErrorMessage>
         </div>
       )}
@@ -368,8 +384,8 @@ export function HistoryPage() {
                 options={[
                   { value: 'timestamp-desc', label: 'Latest Scan First' },
                   { value: 'timestamp-asc', label: 'Oldest Scan First' },
-                  { value: 'cmdi-desc', label: 'CMDI: Highest Risk First' },
-                  { value: 'cmdi-asc', label: 'CMDI: Lowest Risk First' },
+                  { value: 'cmdi-desc', label: 'Highest Debt (CMDI)' },
+                  { value: 'cmdi-asc', label: 'Lowest Debt (CMDI)' },
                   { value: 'repo-asc', label: 'Repository Name (A-Z)' },
                 ]}
               />
@@ -378,10 +394,10 @@ export function HistoryPage() {
             {searchTerm && (
               <Button
                 variant="secondary"
-                icon={<RotateCcw size={14} />}
                 onClick={() => setSearchTerm('')}
+                style={{ fontSize: 'var(--text-xs)' }}
               >
-                Clear
+                Clear Search
               </Button>
             )}
           </div>
@@ -391,91 +407,151 @@ export function HistoryPage() {
       {/* 3. History Table or Empty State */}
       <Card>
         <CardBody style={{ padding: 0 }}>
-          {historyRecords.length === 0 ? (
-            <div style={{ padding: 'var(--space-3xl) var(--space-md)' }}>
-              <EmptyState
-                icon={<FolderPlus size={36} color="var(--color-accent-primary)" />}
-                title="No Analysis History Found"
-                description="Your local analysis history is currently empty. Run an analysis on a repository or reset to the baseline demonstration runs."
-                action={
-                  <div style={{ display: 'flex', gap: 'var(--space-md)', flexWrap: 'wrap', justifyContent: 'center' }}>
-                    <Button
-                      variant="primary"
-                      icon={<Sparkles size={16} />}
-                      onClick={resetToSeedHistory}
-                    >
-                      Restore Demo History Runs
-                    </Button>
-                    <Button
-                      to={ROUTES.REPOSITORY}
-                      variant="secondary"
-                      icon={<Play size={16} />}
-                    >
-                      Analyze New Repository
-                    </Button>
-                  </div>
-                }
-              />
-            </div>
-          ) : filteredRecords.length === 0 ? (
+          {sortedRecords.length === 0 ? (
             <div style={{ padding: 'var(--space-2xl) var(--space-md)' }}>
               <EmptyState
-                icon={<Search size={32} color="var(--color-text-muted)" />}
-                title="No Matching Records"
-                description={`No historical analyses match your search "${searchTerm}".`}
+                icon={<FolderPlus size={36} color="var(--color-accent-primary)" />}
+                title={searchTerm ? 'No Matching Records' : 'No Analysis History'}
+                description={
+                  searchTerm
+                    ? `No historical analyses match your search "${searchTerm}".`
+                    : 'Analyze a repository in Repository Analysis to build maintainability history.'
+                }
                 action={
-                  <Button variant="secondary" onClick={() => setSearchTerm('')}>
-                    Reset Search Filter
-                  </Button>
+                  <div style={{ display: 'flex', gap: 'var(--space-sm)', flexWrap: 'wrap', justifyContent: 'center' }}>
+                    {searchTerm ? (
+                      <Button variant="secondary" onClick={() => setSearchTerm('')}>
+                        Clear Search
+                      </Button>
+                    ) : (
+                      <>
+                        <Button
+                          to={ROUTES.REPOSITORY}
+                          variant="primary"
+                          icon={<Play size={15} />}
+                        >
+                          Analyze Repository
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          icon={<RotateCcw size={14} />}
+                          onClick={resetToSeedHistory}
+                        >
+                          Load Demonstration Seeds
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 }
               />
             </div>
           ) : (
             <Table
               columns={columns}
-              data={sortedRecords}
+              data={paginatedRecords}
               onRowClick={(row) => handleOpenAnalysis(row)}
             />
           )}
         </CardBody>
       </Card>
 
-      {/* Deletion Confirmation Modal */}
+      {/* 4. Pagination Footer */}
+      {sortedRecords.length > 0 && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginTop: 'var(--space-md)',
+            padding: 'var(--space-sm) 0',
+            fontSize: 'var(--text-xs)',
+            color: 'var(--color-text-muted)',
+            flexWrap: 'wrap',
+            gap: 'var(--space-md)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+            <span>Items per page:</span>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              style={{
+                background: 'var(--color-surface)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-sm)',
+                color: 'var(--color-text-primary)',
+                padding: '2px 8px',
+                fontFamily: 'var(--font-mono)',
+                fontSize: 'var(--text-xs)',
+              }}
+            >
+              <option value={5}>5</option>
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+            </select>
+            <span>
+              Showing {sortedRecords.length === 0 ? 0 : (currentPage - 1) * pageSize + 1} to{' '}
+              {Math.min(currentPage * pageSize, sortedRecords.length)} of {sortedRecords.length} records
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+            <span style={{ fontFamily: 'var(--font-mono)' }}>
+              Page {currentPage} of {totalPages}
+            </span>
+            <div style={{ display: 'flex', gap: '4px' }}>
+              <Button
+                variant="secondary"
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                style={{ padding: '4px 8px' }}
+                aria-label="Previous page"
+              >
+                <ChevronLeft size={14} />
+              </Button>
+              <Button
+                variant="secondary"
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                style={{ padding: '4px 8px' }}
+                aria-label="Next page"
+              >
+                <ChevronRight size={14} />
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4. Single Record Deletion Confirmation Dialog */}
       <ConfirmDialog
         isOpen={Boolean(deleteTarget)}
-        title="Delete Historical Analysis?"
-        onCancel={() => setDeleteTarget(null)}
-        onConfirm={handleConfirmDelete}
+        title="Delete Analysis Record"
         confirmLabel="Delete Record"
-        cancelLabel="Keep Record"
         isDanger={true}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteTarget(null)}
       >
-        <p>
-          Are you sure you want to permanently delete the saved analysis for{' '}
-          <strong style={{ color: 'var(--color-text-primary)' }}>
-            {deleteTarget?.repository?.name}
-          </strong>?
-        </p>
-        <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', marginTop: '8px' }}>
-          {deleteTarget?.repository?.isDemo
-            ? 'This action will remove the demonstration record from your browser storage.'
-            : 'This action will delete the persisted record from the backend SQLite database and client history.'}
+        <p style={{ color: 'var(--color-text-primary)', fontSize: 'var(--text-sm)', lineHeight: '1.5' }}>
+          Are you sure you want to delete the analysis record for <strong>"{deleteTarget?.repository?.name}"</strong> ({deleteTarget?.displayTimestamp})? This action removes it from browser storage and backend database.
         </p>
       </ConfirmDialog>
 
-      {/* Clear All Confirmation Modal */}
+      {/* 5. Clear All History Confirmation Dialog */}
       <ConfirmDialog
         isOpen={showClearAllDialog}
-        title="Clear Entire Analysis History?"
-        onCancel={() => setShowClearAllDialog(false)}
-        onConfirm={handleConfirmClearAll}
-        confirmLabel="Clear All Records"
-        cancelLabel="Cancel"
+        title="Clear Entire Analysis History"
+        confirmLabel="Clear All History"
         isDanger={true}
+        onConfirm={handleConfirmClearAll}
+        onCancel={() => setShowClearAllDialog(false)}
       >
-        <p>
-          Are you sure you want to clear all saved historical analyses from localStorage?
-          You can restore the default demonstration entries at any time.
+        <p style={{ color: 'var(--color-text-primary)', fontSize: 'var(--text-sm)', lineHeight: '1.5' }}>
+          Are you sure you want to clear your local analysis history? This action cannot be undone.
         </p>
       </ConfirmDialog>
     </div>

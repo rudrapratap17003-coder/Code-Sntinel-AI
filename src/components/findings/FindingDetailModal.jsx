@@ -43,6 +43,21 @@ export function FindingDetailModal({ finding, onClose, onSelectRelatedFinding })
     setCopiedSnippet(false);
   }, [finding?.id]);
 
+  // Handle Escape key to close modal & lock body scroll
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    }
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = '';
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onClose]);
+
   if (!finding) return null;
 
   const severityVariant = {
@@ -52,15 +67,15 @@ export function FindingDetailModal({ finding, onClose, onSelectRelatedFinding })
     low: 'demo',
   }[finding.severity] || 'default';
 
-  const handleRequestExplanation = async () => {
+  const handleRequestExplanation = async (useFallback = false) => {
     setIsExplaining(true);
     setExplanationError(null);
 
     try {
-      const result = await apiClient.explainFinding(finding);
+      const result = await apiClient.explainFinding(finding, { fallback: useFallback });
       setExplanation(result);
     } catch (err) {
-      setExplanationError(err.message || 'Failed to generate explanation with Gemini.');
+      setExplanationError(err.message || 'Failed to generate explanation.');
     } finally {
       setIsExplaining(false);
     }
@@ -292,18 +307,25 @@ export function FindingDetailModal({ finding, onClose, onSelectRelatedFinding })
               {/* Header with clear provenance */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-xs)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)' }}>
-                  <Badge variant="demo" style={{ background: 'rgba(168, 85, 247, 0.15)', borderColor: '#A855F7', color: '#E9D5FF' }}>
-                    <Sparkles size={11} />
-                    <span>AI EXPLANATION (GEMINI: {explanation.modelName || 'gemini-3.8-flash'})</span>
-                  </Badge>
+                  {explanation.origin === 'FALLBACK_RULE_BASED' ? (
+                    <Badge variant="demo" style={{ background: 'rgba(85, 199, 232, 0.15)', borderColor: '#55C7E8', color: '#BAE6FD' }}>
+                      <Sparkles size={11} />
+                      <span>RULE-BASED DETERMINISTIC EXPLANATION</span>
+                    </Badge>
+                  ) : (
+                    <Badge variant="demo" style={{ background: 'rgba(168, 85, 247, 0.15)', borderColor: '#A855F7', color: '#E9D5FF' }}>
+                      <Sparkles size={11} />
+                      <span>AI EXPLANATION (GEMINI: {explanation.modelName || 'gemini-3.8-flash'})</span>
+                    </Badge>
+                  )}
                   <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>
-                    Generated advisory guidance
+                    {explanation.origin === 'FALLBACK_RULE_BASED' ? 'Generated from verified static rule templates (Gemini offline)' : 'Generated advisory guidance'}
                   </span>
                 </div>
 
                 <Button
                   variant="outline"
-                  onClick={handleRequestExplanation}
+                  onClick={() => handleRequestExplanation(explanation.origin === 'FALLBACK_RULE_BASED')}
                   disabled={isExplaining}
                   style={{ fontSize: '11px', padding: '2px 8px' }}
                   icon={<RefreshCw size={11} className={isExplaining ? 'spinning-icon' : ''} />}
@@ -320,6 +342,12 @@ export function FindingDetailModal({ finding, onClose, onSelectRelatedFinding })
                 <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-primary)', lineHeight: '1.6', margin: 0 }}>
                   {explanation.plainLanguageExplanation}
                 </p>
+                {explanation.priorityGuidance && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', fontSize: 'var(--text-xs)', marginTop: '8px' }}>
+                    <span style={{ color: '#D8B4FE', fontWeight: 'var(--font-semibold)' }}>Triage Priority:</span>
+                    <span style={{ color: 'var(--color-text-primary)', fontFamily: 'var(--font-mono)' }}>{explanation.priorityGuidance}</span>
+                  </div>
+                )}
               </div>
 
               {/* 2. Deep Maintainability Reasoning */}
@@ -346,9 +374,16 @@ export function FindingDetailModal({ finding, onClose, onSelectRelatedFinding })
               {explanation.refactoringExample && (
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <span style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-accent-primary)' }}>
-                      Suggested Refactoring Example
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-accent-primary)' }}>
+                        Suggested Refactoring Example
+                      </span>
+                      {explanation.isExampleIllustrative && (
+                        <span style={{ fontSize: '10px', background: 'rgba(0, 245, 160, 0.1)', color: 'var(--color-accent-primary)', border: '1px solid rgba(0, 245, 160, 0.25)', padding: '1px 6px', borderRadius: 'var(--radius-sm)' }}>
+                          Illustrative Pattern (Not Applied)
+                        </span>
+                      )}
+                    </div>
                     <button
                       type="button"
                       onClick={handleCopyRefactoring}
@@ -472,14 +507,22 @@ export function FindingDetailModal({ finding, onClose, onSelectRelatedFinding })
                 <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-primary)', margin: 0, marginBottom: 'var(--space-xs)' }}>
                   {explanationError}
                 </p>
-                <div style={{ display: 'flex', gap: 'var(--space-xs)' }}>
+                <div style={{ display: 'flex', gap: 'var(--space-xs)', flexWrap: 'wrap' }}>
                   <Button
                     variant="primary"
-                    onClick={handleRequestExplanation}
+                    onClick={() => handleRequestExplanation(false)}
                     style={{ fontSize: '11px', padding: '3px 8px' }}
                     icon={<RotateCcw size={11} />}
                   >
-                    Retry Explanation
+                    Retry Gemini
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => handleRequestExplanation(true)}
+                    style={{ fontSize: '11px', padding: '3px 8px' }}
+                    icon={<Sparkles size={11} />}
+                  >
+                    Use Rule-Based Fallback
                   </Button>
                   <Button
                     variant="outline"
@@ -512,20 +555,30 @@ export function FindingDetailModal({ finding, onClose, onSelectRelatedFinding })
                 <Bot size={16} />
                 <span>Need deeper technical context? Request AI remediation guidance.</span>
               </div>
-              <Button
-                variant="primary"
-                onClick={handleRequestExplanation}
-                style={{
-                  fontSize: 'var(--text-xs)',
-                  background: 'linear-gradient(135deg, #A855F7 0%, #00F5A0 100%)',
-                  color: '#080B0A',
-                  fontWeight: 'var(--font-semibold)',
-                  border: 'none',
-                }}
-                icon={<Sparkles size={13} />}
-              >
-                Explain with AI (Gemini)
-              </Button>
+              <div style={{ display: 'flex', gap: 'var(--space-xs)', flexWrap: 'wrap' }}>
+                <Button
+                  variant="secondary"
+                  onClick={() => handleRequestExplanation(true)}
+                  style={{ fontSize: 'var(--text-xs)' }}
+                  title="Generate instant deterministic explanation from static rule templates"
+                >
+                  Rule-Based Guidance
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={() => handleRequestExplanation(false)}
+                  style={{
+                    fontSize: 'var(--text-xs)',
+                    background: 'linear-gradient(135deg, #A855F7 0%, #00F5A0 100%)',
+                    color: '#080B0A',
+                    fontWeight: 'var(--font-semibold)',
+                    border: 'none',
+                  }}
+                  icon={<Sparkles size={13} />}
+                >
+                  Explain with AI (Gemini)
+                </Button>
+              </div>
             </div>
           )}
         </div>

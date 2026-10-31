@@ -10,6 +10,7 @@ import {
   Sparkles,
   FolderPlus,
   Play,
+  X,
 } from 'lucide-react';
 import {
   PageHeader,
@@ -34,6 +35,14 @@ const SEVERITY_WEIGHTS = {
   low: 1,
 };
 
+const getPriorityTier = (severity) => {
+  const s = (severity || '').toLowerCase();
+  if (s === 'critical') return { label: 'Critical Attention', variant: 'critical' };
+  if (s === 'high') return { label: 'High Priority', variant: 'warning' };
+  if (s === 'medium') return { label: 'Medium Priority', variant: 'medium' };
+  return { label: 'Low Priority', variant: 'default' };
+};
+
 export function FindingsPage() {
   useDocumentTitle('Findings Explorer');
   const [searchParams, setSearchParams] = useSearchParams();
@@ -46,10 +55,19 @@ export function FindingsPage() {
   // Filter & Search State
   const initialCategory = searchParams.get('category') || 'all';
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(initialCategory);
   const [selectedSeverity, setSelectedSeverity] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [sortBy, setSortBy] = useState('severity-desc');
+
+  // Debounce search term to prevent expensive filter recalculations on rapid typing
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -125,13 +143,13 @@ export function FindingsPage() {
         return false;
       }
 
-      // Search term filter
-      if (searchTerm.trim()) {
-        const query = searchTerm.toLowerCase();
-        const matchesId = item.id.toLowerCase().includes(query);
-        const matchesTitle = item.title.toLowerCase().includes(query);
-        const matchesFile = item.file.toLowerCase().includes(query);
-        const matchesRule = item.ruleId.toLowerCase().includes(query);
+      // Search term filter (uses debouncedSearchTerm for fluid UI typing performance)
+      if (debouncedSearchTerm.trim()) {
+        const query = debouncedSearchTerm.toLowerCase();
+        const matchesId = (item.id || '').toLowerCase().includes(query);
+        const matchesTitle = (item.title || '').toLowerCase().includes(query);
+        const matchesFile = (item.file || '').toLowerCase().includes(query);
+        const matchesRule = (item.ruleId || item.rule_id || '').toLowerCase().includes(query);
         const matchesSummary = (item.summary || '').toLowerCase().includes(query);
         if (!matchesId && !matchesTitle && !matchesFile && !matchesRule && !matchesSummary) {
           return false;
@@ -140,7 +158,12 @@ export function FindingsPage() {
 
       return true;
     });
-  }, [allFindings, selectedCategory, selectedSeverity, selectedStatus, searchTerm]);
+  }, [allFindings, selectedCategory, selectedSeverity, selectedStatus, debouncedSearchTerm]);
+
+  // Reset pagination to first page when active filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearchTerm, selectedCategory, selectedSeverity, selectedStatus, sortBy]);
 
   // 2. Sort Logic
   const sortedFindings = useMemo(() => {
@@ -153,10 +176,16 @@ export function FindingsPage() {
         return (SEVERITY_WEIGHTS[a.severity] || 0) - (SEVERITY_WEIGHTS[b.severity] || 0);
       }
       if (sortBy === 'id-asc') {
-        return a.id.localeCompare(b.id);
+        return (a.id || '').localeCompare(b.id || '');
       }
       if (sortBy === 'file-asc') {
-        return a.file.localeCompare(b.file);
+        return (a.file || '').localeCompare(b.file || '');
+      }
+      if (sortBy === 'category-asc') {
+        return (a.category || '').localeCompare(b.category || '');
+      }
+      if (sortBy === 'title-asc') {
+        return (a.title || '').localeCompare(b.title || '');
       }
       return 0;
     });
@@ -173,6 +202,7 @@ export function FindingsPage() {
 
   const handleClearFilters = () => {
     setSearchTerm('');
+    setDebouncedSearchTerm('');
     setSelectedCategory('all');
     setSelectedSeverity('all');
     setSelectedStatus('all');
@@ -188,12 +218,12 @@ export function FindingsPage() {
     }
   };
 
-  // Table Columns
+  // Table Columns with Priority Tier
   const columns = [
     {
       key: 'severity',
-      label: 'Severity',
-      width: '110px',
+      label: 'Severity & Tier',
+      width: '130px',
       render: (val) => {
         const variant = {
           critical: 'critical',
@@ -201,7 +231,15 @@ export function FindingsPage() {
           medium: 'medium',
           low: 'demo',
         }[val] || 'default';
-        return <Badge variant={variant}>{val.toUpperCase()}</Badge>;
+        const tier = getPriorityTier(val);
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+            <Badge variant={variant}>{val.toUpperCase()}</Badge>
+            <span style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', color: 'var(--color-text-muted)' }}>
+              {tier.label}
+            </span>
+          </div>
+        );
       },
     },
     {
@@ -212,8 +250,8 @@ export function FindingsPage() {
           <div style={{ fontWeight: 'var(--font-medium)', color: 'var(--color-text-primary)' }}>
             {title}
           </div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--color-text-muted)' }}>
-            <span style={{ color: 'var(--color-accent-primary)' }}>{row.id}</span> • {row.ruleId}
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
+            <span style={{ color: 'var(--color-accent-primary)' }}>{row.id}</span> • {row.ruleId || row.rule_id}
           </div>
         </div>
       ),
@@ -234,7 +272,7 @@ export function FindingsPage() {
       render: (file, row) => (
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>
           <span style={{ color: 'var(--color-text-primary)' }}>{file}</span>
-          <div style={{ color: 'var(--color-text-muted)' }}>{row.lineRange}</div>
+          <div style={{ color: 'var(--color-text-muted)' }}>{row.lineRange || row.line_range}</div>
         </div>
       ),
     },
@@ -324,10 +362,10 @@ export function FindingsPage() {
                   }}
                   options={[
                     { value: 'all', label: 'All Severities' },
-                    { value: 'critical', label: 'Critical' },
-                    { value: 'high', label: 'High' },
-                    { value: 'medium', label: 'Medium' },
-                    { value: 'low', label: 'Low' },
+                    { value: 'critical', label: 'Critical Attention' },
+                    { value: 'high', label: 'High Priority' },
+                    { value: 'medium', label: 'Medium Priority' },
+                    { value: 'low', label: 'Low Priority' },
                   ]}
                 />
               </div>
@@ -356,8 +394,10 @@ export function FindingsPage() {
                   options={[
                     { value: 'severity-desc', label: 'Severity: High to Low' },
                     { value: 'severity-asc', label: 'Severity: Low to High' },
+                    { value: 'title-asc', label: 'Title (A–Z)' },
+                    { value: 'category-asc', label: 'Category (A–Z)' },
+                    { value: 'file-asc', label: 'File Path (A–Z)' },
                     { value: 'id-asc', label: 'Finding ID (Asc)' },
-                    { value: 'file-asc', label: 'File Path (A-Z)' },
                   ]}
                 />
               </div>
@@ -373,10 +413,17 @@ export function FindingsPage() {
             </div>
 
             {/* Bottom row: Filter stats */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
-              <span>
-                Showing <strong>{filteredFindings.length}</strong> of <strong>{allFindings.length}</strong> total findings
-              </span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', flexWrap: 'wrap', gap: 'var(--space-xs)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+                <span style={{ background: 'var(--color-surface-elevated)', padding: '2px 8px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)' }}>
+                  Showing <strong>{filteredFindings.length}</strong> of <strong>{allFindings.length}</strong> total findings
+                </span>
+                {searchTerm && (
+                  <span style={{ color: 'var(--color-accent-primary)' }}>
+                    Query: "{searchTerm}"
+                  </span>
+                )}
+              </div>
               <span style={{ fontFamily: 'var(--font-mono)' }}>
                 Select any row to inspect line coordinates and suggested remediation
               </span>
@@ -393,11 +440,22 @@ export function FindingsPage() {
               <EmptyState
                 icon={<Filter size={32} color="var(--color-text-muted)" />}
                 title="No Matching Findings"
-                description={`No maintainability findings match your search "${searchTerm}" with the active category and severity filters.`}
+                description={
+                  searchTerm
+                    ? `No findings match "${searchTerm}" with the active category and severity filters.`
+                    : 'No findings match the current category, severity, and status filters.'
+                }
                 action={
-                  <Button variant="secondary" icon={<RotateCcw size={14} />} onClick={handleClearFilters}>
-                    Reset All Filters
-                  </Button>
+                  <div style={{ display: 'flex', gap: 'var(--space-sm)', flexWrap: 'wrap', justifyContent: 'center' }}>
+                    {searchTerm && (
+                      <Button variant="secondary" icon={<X size={14} />} onClick={() => setSearchTerm('')}>
+                        Clear Search Query
+                      </Button>
+                    )}
+                    <Button variant="primary" icon={<RotateCcw size={14} />} onClick={handleClearFilters}>
+                      Reset All Filters
+                    </Button>
+                  </div>
                 }
               />
             </div>

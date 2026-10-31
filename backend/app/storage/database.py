@@ -13,6 +13,10 @@ def get_db_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(DATABASE_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON;")
+    conn.execute("PRAGMA journal_mode = WAL;")
+    conn.execute("PRAGMA synchronous = NORMAL;")
+    conn.execute("PRAGMA temp_store = MEMORY;")
+    conn.execute("PRAGMA cache_size = -64000;")
     return conn
 
 
@@ -21,6 +25,8 @@ def init_db():
     conn = get_db_connection()
     try:
         with conn:
+            conn.execute("PRAGMA journal_mode = WAL;")
+            conn.execute("PRAGMA synchronous = NORMAL;")
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS analyses (
@@ -40,6 +46,11 @@ def init_db():
             conn.execute(
                 """
                 CREATE INDEX IF NOT EXISTS idx_analyses_timestamp ON analyses (timestamp DESC)
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_analyses_repo_time ON analyses (repository_url, timestamp DESC)
                 """
             )
     finally:
@@ -81,7 +92,7 @@ def save_analysis(result: AnalysisResult) -> None:
                     result.display_timestamp,
                     result.repository.name,
                     result.repository.url,
-                    result.summary.cmdi,
+                    result.summary.cmdi if result.summary.cmdi is not None else 0.0,
                     result.summary.risk_category,
                     len(result.findings),
                     result.repository.files_examined,
@@ -107,8 +118,8 @@ def get_analysis(analysis_id: str) -> Optional[AnalysisResult]:
         conn.close()
 
 
-def list_analyses(limit: int = 50) -> List[AnalysisListItem]:
-    """Lists previous analysis run summaries."""
+def list_analyses(limit: int = 50, offset: int = 0) -> List[AnalysisListItem]:
+    """Lists previous analysis run summaries with pagination support."""
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
@@ -118,9 +129,9 @@ def list_analyses(limit: int = 50) -> List[AnalysisListItem]:
                    cmdi, risk_category, findings_count, files_examined
             FROM analyses
             ORDER BY timestamp DESC
-            LIMIT ?
+            LIMIT ? OFFSET ?
             """,
-            (limit,),
+            (limit, offset),
         )
         rows = cursor.fetchall()
         return [
@@ -130,7 +141,8 @@ def list_analyses(limit: int = 50) -> List[AnalysisListItem]:
                 display_timestamp=r["display_timestamp"],
                 repository_name=r["repository_name"],
                 repository_url=r["repository_url"],
-                cmdi=r["cmdi"],
+                cmdi=r["cmdi"] if r["risk_category"] != "Not Available" else None,
+                score_available=r["risk_category"] != "Not Available",
                 risk_category=r["risk_category"],
                 findings_count=r["findings_count"],
                 files_examined=r["files_examined"],
@@ -150,3 +162,39 @@ def delete_analysis(analysis_id: str) -> bool:
             return cursor.rowcount > 0
     finally:
         conn.close()
+
+
+def get_analyses_by_repository(repository_url: str) -> List[AnalysisListItem]:
+    """Retrieves all historical analysis summaries for a repository ordered chronologically (oldest to newest)."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT id, timestamp, display_timestamp, repository_name, repository_url,
+                   cmdi, risk_category, findings_count, files_examined
+            FROM analyses
+            WHERE repository_url = ?
+            ORDER BY timestamp ASC
+            """,
+            (repository_url,),
+        )
+        rows = cursor.fetchall()
+        return [
+            AnalysisListItem(
+                id=r["id"],
+                timestamp=r["timestamp"],
+                display_timestamp=r["display_timestamp"],
+                repository_name=r["repository_name"],
+                repository_url=r["repository_url"],
+                cmdi=r["cmdi"] if r["risk_category"] != "Not Available" else None,
+                score_available=r["risk_category"] != "Not Available",
+                risk_category=r["risk_category"],
+                findings_count=r["findings_count"],
+                files_examined=r["files_examined"],
+            )
+            for r in rows
+        ]
+    finally:
+        conn.close()
+

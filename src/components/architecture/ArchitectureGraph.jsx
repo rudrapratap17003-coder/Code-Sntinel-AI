@@ -132,17 +132,21 @@ export function ArchitectureGraph({
         }}
       >
         <button
+          type="button"
           onClick={handleFitView}
+          aria-label="Fit graph to view bounds"
           style={{
             background: 'transparent',
             border: 'none',
             color: 'var(--color-text-primary)',
-            padding: '4px 8px',
+            padding: '6px 10px',
+            minHeight: '32px',
             fontSize: 'var(--text-xs)',
             cursor: 'pointer',
             display: 'inline-flex',
             alignItems: 'center',
-            gap: '4px',
+            gap: '6px',
+            borderRadius: 'var(--radius-sm)',
           }}
           title="Fit graph to view bounds"
         >
@@ -150,17 +154,21 @@ export function ArchitectureGraph({
           <span>Fit View</span>
         </button>
         <button
+          type="button"
           onClick={handleReset}
+          aria-label="Reset zoom and clear selection"
           style={{
             background: 'transparent',
             border: 'none',
             color: 'var(--color-text-muted)',
-            padding: '4px 8px',
+            padding: '6px 10px',
+            minHeight: '32px',
             fontSize: 'var(--text-xs)',
             cursor: 'pointer',
             display: 'inline-flex',
             alignItems: 'center',
-            gap: '4px',
+            gap: '6px',
+            borderRadius: 'var(--radius-sm)',
           }}
           title="Reset zoom and clear selection"
         >

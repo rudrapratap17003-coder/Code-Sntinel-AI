@@ -27,14 +27,24 @@ export function ModuleListView({ modules = [], selectedModuleId, onSelectModule 
     {
       key: 'category',
       label: 'Category',
-      render: (_, row) => <Badge variant="default">{row.data.category}</Badge>,
+      render: (_, row) => {
+        const isHighCoupling = (row.data.afferentCoupling >= 3 || row.data.efferentCoupling >= 4);
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+            <Badge variant="default">{row.data.category}</Badge>
+            {isHighCoupling && (
+              <Badge variant="medium" style={{ fontSize: '10px' }}>HIGH COUPLING</Badge>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: 'afferentCoupling',
       label: 'Callers (Ca)',
       align: 'center',
       render: (_, row) => (
-        <span style={{ fontFamily: 'var(--font-mono)', fontWeight: row.data.afferentCoupling >= 4 ? 'bold' : 'normal', color: row.data.afferentCoupling >= 4 ? 'var(--color-severity-medium)' : 'inherit' }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontWeight: row.data.afferentCoupling >= 3 ? 'bold' : 'normal', color: row.data.afferentCoupling >= 3 ? 'var(--color-severity-medium)' : 'inherit' }}>
           {row.data.afferentCoupling}
         </span>
       ),
@@ -44,7 +54,9 @@ export function ModuleListView({ modules = [], selectedModuleId, onSelectModule 
       label: 'Dependencies (Ce)',
       align: 'center',
       render: (_, row) => (
-        <span style={{ fontFamily: 'var(--font-mono)' }}>{row.data.efferentCoupling}</span>
+        <span style={{ fontFamily: 'var(--font-mono)', fontWeight: row.data.efferentCoupling >= 4 ? 'bold' : 'normal', color: row.data.efferentCoupling >= 4 ? 'var(--color-severity-medium)' : 'inherit' }}>
+          {row.data.efferentCoupling}
+        </span>
       ),
     },
     {

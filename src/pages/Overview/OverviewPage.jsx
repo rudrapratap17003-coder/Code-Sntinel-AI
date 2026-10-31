@@ -113,23 +113,42 @@ export function OverviewPage() {
     );
   }
 
-  const { repository, summary, indicators = [], priorityFindings = [] } = currentAnalysis;
+  const {
+    repository,
+    summary,
+    indicators = [],
+    priorityFindings = [],
+    findings = [],
+    hotspots = [],
+  } = currentAnalysis;
+
+  const criticalCount = findings.filter((f) => (f.severity || '').toLowerCase() === 'critical').length;
+  const highCount = findings.filter((f) => (f.severity || '').toLowerCase() === 'high').length;
+  const hotspotsCount = hotspots.length;
 
   // CMDI score clamp & tier mapping
-  const cmdiValue = typeof summary.cmdi === 'number' ? summary.cmdi : 0;
+  const isScoreAvailable =
+    summary.scoreAvailable !== false &&
+    summary.score_available !== false &&
+    summary.cmdi !== null &&
+    summary.riskCategory !== 'Not Available' &&
+    summary.risk_category !== 'Not Available';
+  const cmdiValue = isScoreAvailable && typeof summary.cmdi === 'number' ? summary.cmdi : 0;
   const clampedCmdi = Math.max(0, Math.min(100, cmdiValue));
 
-  let cmdiBorderColor = 'var(--accent-primary)';
-  let cmdiRiskTier = 'Low Risk';
-  if (clampedCmdi > 75) {
-    cmdiBorderColor = 'var(--severity-critical)';
-    cmdiRiskTier = 'Critical Risk';
-  } else if (clampedCmdi > 50) {
-    cmdiBorderColor = 'var(--severity-warning)';
-    cmdiRiskTier = 'High Risk';
-  } else if (clampedCmdi > 25) {
-    cmdiBorderColor = 'var(--severity-info)';
-    cmdiRiskTier = 'Moderate Risk';
+  let cmdiBorderColor = isScoreAvailable ? 'var(--accent-primary)' : 'var(--color-border)';
+  let cmdiRiskTier = isScoreAvailable ? 'Low Risk' : 'Not Available';
+  if (isScoreAvailable) {
+    if (clampedCmdi > 75) {
+      cmdiBorderColor = 'var(--severity-critical)';
+      cmdiRiskTier = 'Critical Risk';
+    } else if (clampedCmdi > 50) {
+      cmdiBorderColor = 'var(--severity-warning)';
+      cmdiRiskTier = 'High Risk';
+    } else if (clampedCmdi > 25) {
+      cmdiBorderColor = 'var(--severity-info)';
+      cmdiRiskTier = 'Moderate Risk';
+    }
   }
 
   // Map 4 core indicators safely
@@ -221,7 +240,7 @@ export function OverviewPage() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', flexWrap: 'wrap' }}>
-          {/* Target Repository Branch context (avoids repeating repository name from topbar while preserving branch & commit) */}
+          {/* Target Repository Branch context */}
           {repository?.branch && (
             <div
               style={{
@@ -249,7 +268,7 @@ export function OverviewPage() {
             </div>
           )}
 
-          {/* Compact environment / dataset badge mandated by Section A */}
+          {/* Environment / dataset badge */}
           {isDemoMode ? (
             <Badge variant="demo" title="Displayed metrics are demonstration heuristics and simulated analysis values.">
               <Sparkles size={11} />
@@ -285,7 +304,7 @@ export function OverviewPage() {
             </div>
           </div>
 
-          {/* 2. Total Findings */}
+          {/* 2. Total Findings & Severity Breakdown */}
           <div className="summary-stat-card">
             <div className="summary-stat-header">
               <span className="summary-stat-label">Total Findings</span>
@@ -293,11 +312,25 @@ export function OverviewPage() {
             </div>
             <div className="summary-stat-value">
               {typeof repository.findingsCount === 'number'
-                ? `${repository.findingsCount.toLocaleString()} findings`
-                : 'Not available'}
+                ? `${repository.findingsCount.toLocaleString()} issues`
+                : `${findings.length} issues`}
             </div>
-            <div className="summary-stat-supporting">
-              {isDemoMode ? 'Illustrative demo findings' : 'Detected rule issues'}
+            <div className="summary-stat-supporting" style={{ flexWrap: 'wrap', gap: '6px' }}>
+              <span style={{ color: criticalCount > 0 ? 'var(--color-severity-critical)' : 'var(--color-accent-primary)', fontWeight: 'bold' }}>
+                {criticalCount} Critical
+              </span>
+              <span>•</span>
+              <span style={{ color: highCount > 0 ? 'var(--color-severity-medium)' : 'var(--text-secondary)' }}>
+                {highCount} High
+              </span>
+              {hotspotsCount > 0 && (
+                <>
+                  <span>•</span>
+                  <span style={{ color: 'var(--color-accent-primary)' }}>
+                    {hotspotsCount} Hotspots
+                  </span>
+                </>
+              )}
             </div>
           </div>
 
@@ -357,7 +390,7 @@ export function OverviewPage() {
               >
                 Code Maintainability Debt Index (CMDI)
               </h2>
-              <Badge variant={summary.riskSeverity || 'medium'}>
+              <Badge variant={summary.riskSeverity || (isScoreAvailable ? 'medium' : 'default')}>
                 {summary.riskCategory || cmdiRiskTier}
               </Badge>
               {isDemoMode && (
@@ -381,11 +414,13 @@ export function OverviewPage() {
           <div className="cmdi-main-row">
             <div className="cmdi-score-block">
               <span className="cmdi-score-number">
-                {clampedCmdi.toFixed(1)}
+                {isScoreAvailable ? clampedCmdi.toFixed(1) : 'Not Available'}
               </span>
-              <span className="cmdi-score-scale">
-                / 100
-              </span>
+              {isScoreAvailable && (
+                <span className="cmdi-score-scale">
+                  / 100
+                </span>
+              )}
               <span className="cmdi-score-badge-text">
                 ({summary.riskCategory || cmdiRiskTier}{isDemoMode ? ' • Illustrative' : ''})
               </span>
@@ -393,11 +428,10 @@ export function OverviewPage() {
 
             <div className="cmdi-explanation-container">
               <p className="cmdi-explanation-text">
-                {isDemoMode ? (
-                  summary.interpretation ||
-                  'Illustrative maintainability assessment: reflects simulated friction modeled across branching complexity, code duplication, and architectural coupling indicators. (Demonstration sample — no repository was scanned.)'
-                ) : (
+                {isScoreAvailable ? (
                   summary.interpretation || 'Maintainability assessment computed from structural indicators.'
+                ) : (
+                  summary.interpretation || 'No valid AST indicators were measurable for this repository to compute CMDI.'
                 )}
               </p>
             </div>
@@ -407,32 +441,34 @@ export function OverviewPage() {
           <div
             className="cmdi-meter-track"
             role="meter"
-            aria-valuenow={clampedCmdi}
+            aria-valuenow={isScoreAvailable ? clampedCmdi : 0}
             aria-valuemin="0"
             aria-valuemax="100"
             aria-label="Code Maintainability Debt Index score meter"
           >
             <div
               className="cmdi-meter-gradient"
-              style={{ width: `${clampedCmdi}%` }}
+              style={{ width: isScoreAvailable ? `${clampedCmdi}%` : '0%' }}
             />
-            <div
-              className="cmdi-meter-pin"
-              style={{ left: `${clampedCmdi}%` }}
-              title={`Score: ${clampedCmdi.toFixed(1)}`}
-            />
+            {isScoreAvailable && (
+              <div
+                className="cmdi-meter-pin"
+                style={{ left: `${clampedCmdi}%` }}
+                title={`Score: ${clampedCmdi.toFixed(1)}`}
+              />
+            )}
           </div>
 
           <div className="cmdi-meter-tiers" aria-hidden="true">
-            <span>0 Low Risk (0–25)</span>
-            <span>Moderate (26–50)</span>
-            <span>High (51–75)</span>
-            <span>Critical (76–100) 100</span>
+            <span style={{ color: '#00F5A0' }}>0 Low Risk (0–25)</span>
+            <span style={{ color: '#55C7E8' }}>Moderate (26–50)</span>
+            <span style={{ color: '#F5B942' }}>High (51–75)</span>
+            <span style={{ color: '#FF5D68' }}>Critical (76–100) 100</span>
           </div>
 
           <p className="cmdi-disclaimer">
             <HelpCircle size={12} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} />
-            CMDI is a project-defined heuristic index whose reliability depends on its formula, underlying measurements, and analysis coverage. It has not been scientifically validated.
+            The Code Maintainability Debt Index (CMDI) is a project-defined heuristic score (0–100) calculated from static AST indicators. It is not an established universal standard.
           </p>
         </div>
       </section>
@@ -459,7 +495,7 @@ export function OverviewPage() {
             <div className="indicator-top">
               <div className="indicator-header">
                 <span className="indicator-name">Complexity</span>
-                {complexityInd ? (
+                {complexityInd && complexityInd.normalizedRisk !== null ? (
                   <Badge variant={complexityInd.severity === 'critical' ? 'critical' : 'medium'}>
                     {(complexityInd.severity || 'high').toUpperCase()}
                   </Badge>
@@ -468,7 +504,7 @@ export function OverviewPage() {
                 )}
               </div>
               <div className="indicator-value">
-                {complexityInd ? (complexityInd.rawMetric || complexityInd.raw_metric || '38 max / 8.4 avg') : 'Not measured'}
+                {complexityInd && complexityInd.rawMetric ? complexityInd.rawMetric : 'Not measured'}
               </div>
               <p className="indicator-description">
                 {INDICATOR_DESCRIPTIONS.complexity}
@@ -493,7 +529,7 @@ export function OverviewPage() {
             <div className="indicator-top">
               <div className="indicator-header">
                 <span className="indicator-name">Code Duplication</span>
-                {duplicationInd ? (
+                {duplicationInd && duplicationInd.normalizedRisk !== null ? (
                   <Badge variant="medium">
                     {(duplicationInd.severity || 'medium').toUpperCase()}
                   </Badge>
@@ -502,7 +538,7 @@ export function OverviewPage() {
                 )}
               </div>
               <div className="indicator-value">
-                {duplicationInd ? (duplicationInd.rawMetric || duplicationInd.raw_metric || '4.2% (1,620 lines)') : 'Not measured'}
+                {duplicationInd && duplicationInd.rawMetric ? duplicationInd.rawMetric : 'Not measured'}
               </div>
               <p className="indicator-description">
                 {INDICATOR_DESCRIPTIONS.duplication}
@@ -527,7 +563,7 @@ export function OverviewPage() {
             <div className="indicator-top">
               <div className="indicator-header">
                 <span className="indicator-name">Architectural Coupling</span>
-                {couplingInd ? (
+                {couplingInd && couplingInd.normalizedRisk !== null ? (
                   <Badge variant={couplingInd.severity === 'critical' ? 'critical' : 'medium'}>
                     {(couplingInd.severity || 'critical').toUpperCase()}
                   </Badge>
@@ -536,7 +572,7 @@ export function OverviewPage() {
                 )}
               </div>
               <div className="indicator-value">
-                {couplingInd ? (couplingInd.rawMetric || couplingInd.raw_metric || '1 cycle (0.42 avg)') : 'Not measured'}
+                {couplingInd && couplingInd.rawMetric ? couplingInd.rawMetric : 'Not measured'}
               </div>
               <p className="indicator-description">
                 {INDICATOR_DESCRIPTIONS.coupling}
@@ -561,7 +597,7 @@ export function OverviewPage() {
             <div className="indicator-top">
               <div className="indicator-header">
                 <span className="indicator-name">Error-Handling</span>
-                {errorHandlingInd ? (
+                {errorHandlingInd && errorHandlingInd.normalizedRisk !== null ? (
                   <Badge variant="medium">
                     {(errorHandlingInd.severity || 'medium').toUpperCase()}
                   </Badge>
@@ -570,7 +606,7 @@ export function OverviewPage() {
                 )}
               </div>
               <div className="indicator-value">
-                {errorHandlingInd ? (errorHandlingInd.rawMetric || errorHandlingInd.raw_metric || '11 antipatterns') : 'Not measured'}
+                {errorHandlingInd && errorHandlingInd.rawMetric ? errorHandlingInd.rawMetric : 'Not measured'}
               </div>
               <p className="indicator-description">
                 {INDICATOR_DESCRIPTIONS.error_handling}

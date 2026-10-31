@@ -12,6 +12,10 @@ import {
   X,
   Sparkles,
   LogOut,
+  TrendingUp,
+  GitCompare,
+  Lightbulb,
+  FileText,
 } from 'lucide-react';
 import { Badge } from '../components/ui/Badge';
 import { ROUTES, APP_CONFIG } from '../utils/constants';
@@ -23,6 +27,10 @@ const NAV_ITEMS = [
   { label: 'Technical Debt', to: ROUTES.TECHNICAL_DEBT, icon: <Flame size={18} /> },
   { label: 'Findings', to: ROUTES.FINDINGS, icon: <ShieldAlert size={18} /> },
   { label: 'Architecture', to: ROUTES.ARCHITECTURE, icon: <Network size={18} /> },
+  { label: 'CMDI Trends', to: ROUTES.TRENDS, icon: <TrendingUp size={18} /> },
+  { label: 'Compare Snapshots', to: ROUTES.COMPARE, icon: <GitCompare size={18} /> },
+  { label: 'Insights & Hotspots', to: ROUTES.INSIGHTS, icon: <Lightbulb size={18} /> },
+  { label: 'Developer Report', to: ROUTES.REPORT, icon: <FileText size={18} /> },
   { label: 'History', to: ROUTES.HISTORY, icon: <History size={18} /> },
   { label: 'Settings', to: ROUTES.SETTINGS, icon: <Settings size={18} /> },
 ];

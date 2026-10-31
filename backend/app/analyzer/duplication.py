@@ -117,14 +117,13 @@ def detect_code_duplication(
         for i in range(len(norm_lines) - min_lines + 1):
             window = norm_lines[i : i + min_lines]
             combined = "\n".join(text for _, text in window)
-            h = hashlib.sha256(combined.encode("utf-8")).hexdigest()
+            h = hash(combined)
 
             start_line = window[0][0]
             end_line = window[-1][0]
-            raw_lines = file_raw_lines[f.relative_path]
-            snippet = "\n".join(raw_lines[start_line - 1 : min(end_line, start_line + 8)])
 
-            hash_index[h].append((f.relative_path, start_line, end_line, snippet, min_lines))
+            # Store lightweight tuple (omit snippet string until a match is confirmed)
+            hash_index[h].append((f.relative_path, start_line, end_line))
 
     # Match blocks sharing the same hash
     matches: List[DuplicateBlockMatch] = []
@@ -135,10 +134,18 @@ def detect_code_duplication(
         if len(occurrences) < 2:
             continue
 
-        for i in range(len(occurrences)):
-            for j in range(i + 1, len(occurrences)):
-                file_a, start_a, end_a, snippet_a, cnt_a = occurrences[i]
-                file_b, start_b, end_b, _, _ = occurrences[j]
+        # If window appears in many files, record lines for all occurrences
+        for file_path, start_ln, end_ln in occurrences:
+            for ln in range(start_ln, end_ln + 1):
+                duplicated_lines_set[file_path].add(ln)
+
+        # Cap pairwise match object generation to prevent O(K^2) memory explosion on ubiquitous lines
+        occ_sample = occurrences[:15] if len(occurrences) > 15 else occurrences
+
+        for i in range(len(occ_sample)):
+            for j in range(i + 1, len(occ_sample)):
+                file_a, start_a, end_a = occ_sample[i]
+                file_b, start_b, end_b = occ_sample[j]
 
                 # If same file, avoid overlapping windows
                 if file_a == file_b and abs(start_a - start_b) < min_lines:
@@ -149,11 +156,9 @@ def detect_code_duplication(
                     continue
                 seen_pairs.add(pair_key)
 
-                # Record lines as duplicated
-                for ln in range(start_a, end_a + 1):
-                    duplicated_lines_set[file_a].add(ln)
-                for ln in range(start_b, end_b + 1):
-                    duplicated_lines_set[file_b].add(ln)
+                # Lazily extract snippet only for genuine matches
+                raw_lines = file_raw_lines.get(file_a, [])
+                snippet_a = "\n".join(raw_lines[start_a - 1 : min(end_a, start_a + 8)])
 
                 matches.append(
                     DuplicateBlockMatch(
@@ -163,7 +168,7 @@ def detect_code_duplication(
                         file_b=file_b,
                         start_line_b=start_b,
                         end_line_b=end_b,
-                        line_count=cnt_a,
+                        line_count=min_lines,
                         snippet=snippet_a,
                     )
                 )

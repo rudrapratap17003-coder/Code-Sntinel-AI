@@ -19,7 +19,10 @@ export function Select({
   disabled = false,
   ...props
 }) {
-  const selectId = id || (label ? label.toLowerCase().replace(/\s+/g, '-') : undefined);
+  const generatedId = React.useId();
+  const selectId = id || (label ? label.toLowerCase().replace(/\s+/g, '-') : generatedId);
+  const hintId = hint ? `${selectId}-hint` : undefined;
+  const errorId = error ? `${selectId}-error` : undefined;
 
   return (
     <div className={`form-group ${className}`.trim()}>
@@ -28,15 +31,22 @@ export function Select({
           {label}
         </label>
       )}
-      <select id={selectId} className="form-select" disabled={disabled} {...props}>
+      <select
+        id={selectId}
+        className="form-select"
+        disabled={disabled}
+        aria-invalid={Boolean(error)}
+        aria-describedby={error ? errorId : hintId}
+        {...props}
+      >
         {options.map((opt) => (
           <option key={opt.value} value={opt.value} style={{ background: 'var(--color-surface-elevated)' }}>
             {opt.label}
           </option>
         ))}
       </select>
-      {hint && !error && <span className="form-hint">{hint}</span>}
-      {error && <span className="form-error">{error}</span>}
+      {hint && !error && <span id={hintId} className="form-hint">{hint}</span>}
+      {error && <span id={errorId} className="form-error">{error}</span>}
     </div>
   );
 }

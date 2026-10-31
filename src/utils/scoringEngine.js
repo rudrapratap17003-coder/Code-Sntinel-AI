@@ -63,6 +63,7 @@ export function getCmdiTier(score) {
   if (typeof score !== 'number' || isNaN(score)) {
     return {
       tier: 'unknown',
+      id: 'unknown',
       min: 0,
       max: 100,
       label: 'Not Available',

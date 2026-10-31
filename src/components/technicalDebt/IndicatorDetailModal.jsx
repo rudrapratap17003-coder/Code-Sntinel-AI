@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { X, ArrowRight, Activity, Layers, Network, AlertTriangle } from 'lucide-react';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
@@ -10,6 +10,22 @@ import { Button } from '../ui/Button';
  * @param {Function} props.onClose
  */
 export function IndicatorDetailModal({ indicator, onClose }) {
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    }
+    if (indicator) {
+      document.body.style.overflow = 'hidden';
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      document.body.style.overflow = '';
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [indicator, onClose]);
+
   if (!indicator) return null;
 
   const icons = {
@@ -71,25 +87,25 @@ export function IndicatorDetailModal({ indicator, onClose }) {
             <div>
               <span style={{ color: 'var(--color-text-muted)' }}>Raw Measurement:</span>
               <div style={{ color: 'var(--color-text-primary)', fontWeight: 'var(--font-bold)', marginTop: '2px' }}>
-                {indicator.rawMetric}
+                {indicator.rawMetric || 'Not available'}
               </div>
             </div>
             <div>
               <span style={{ color: 'var(--color-text-muted)' }}>Normalized Risk:</span>
               <div style={{ color: 'var(--color-severity-critical)', fontWeight: 'var(--font-bold)', marginTop: '2px' }}>
-                {indicator.normalizedRisk} / 100
+                {indicator.normalizedRisk !== null && indicator.normalizedRisk !== undefined ? `${indicator.normalizedRisk} / 100` : 'Not available'}
               </div>
             </div>
             <div>
               <span style={{ color: 'var(--color-text-muted)' }}>Weight in CMDI:</span>
               <div style={{ color: 'var(--color-text-primary)', fontWeight: 'var(--font-bold)', marginTop: '2px' }}>
-                {Math.round(indicator.weight * 100)}%
+                {Math.round((indicator.effectiveWeight ?? indicator.weight ?? 0.25) * 100)}%
               </div>
             </div>
             <div>
               <span style={{ color: 'var(--color-text-muted)' }}>Contribution:</span>
               <div style={{ color: 'var(--color-accent-primary)', fontWeight: 'var(--font-bold)', marginTop: '2px' }}>
-                +{indicator.contribution} pts
+                {indicator.normalizedRisk !== null ? `+${indicator.contribution} pts` : 'Not available'}
               </div>
             </div>
           </div>

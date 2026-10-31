@@ -180,3 +180,45 @@ input:focus-visible {
   color: var(--color-accent-primary);
   border-color: rgba(0, 245, 160, 0.3);
 }
+
+/* Print Optimization for Developer Improvement Report */
+@media print {
+  .dashboard-sidebar,
+  .dashboard-header,
+  .no-print,
+  .top-nav {
+    display: none !important;
+  }
+
+  body, html, #root, .dashboard-layout, .dashboard-main, .dashboard-content {
+    background: #ffffff !important;
+    color: #111827 !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  #printable-report {
+    border: none !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+    color: #111827 !important;
+    padding: 0 !important;
+  }
+
+  #printable-report * {
+    color: #111827 !important;
+    border-color: #d1d5db !important;
+    background: transparent !important;
+  }
+
+  table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+  }
+
+  th, td {
+    border: 1px solid #e5e7eb !important;
+    padding: 6px 8px !important;
+  }
+}

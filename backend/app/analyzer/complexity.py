@@ -132,7 +132,7 @@ class PureASTComplexityVisitor(ast.NodeVisitor):
         self.generic_visit(func_node)
 
 
-def analyze_complexity(code: str, file_path: str) -> List[FunctionComplexityInfo]:
+def analyze_complexity(code: str, file_path: str, tree: Optional[Any] = None) -> List[FunctionComplexityInfo]:
     """Analyzes cyclomatic complexity for all functions in the given code string."""
     code_lines = code.splitlines()
 
@@ -164,9 +164,9 @@ def analyze_complexity(code: str, file_path: str) -> List[FunctionComplexityInfo
 
     # Pure AST fallback
     try:
-        tree = ast.parse(code, filename=file_path)
+        parsed_tree = tree if tree is not None else ast.parse(code, filename=file_path)
         visitor = PureASTComplexityVisitor(code_lines, file_path)
-        visitor.visit(tree)
+        visitor.visit(parsed_tree)
         return visitor.functions
     except Exception:
         return []

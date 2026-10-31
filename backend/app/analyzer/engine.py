@@ -69,12 +69,13 @@ class StaticAnalysisEngine:
                 finding_counter += 1
                 all_findings.append(syntax_err)
             else:
+                f.tree = tree
                 valid_files.append(f)
 
         # 3. Cyclomatic Complexity Analysis
         all_functions: List[FunctionComplexityInfo] = []
         for f in valid_files:
-            func_infos = analyze_complexity(f.content, f.relative_path)
+            func_infos = analyze_complexity(f.content, f.relative_path, tree=getattr(f, "tree", None))
             all_functions.extend(func_infos)
 
         complexity_findings, complexity_metrics = generate_complexity_findings(
@@ -342,17 +343,11 @@ class StaticAnalysisEngine:
 
         # 9. Compute Scoring & CMDI
         normalized_risks = normalize_indicator_risks(
-            max_complexity=complexity_metrics["max_complexity"],
-            duplication_percent=dup_metrics["duplication_percent"],
-            circular_cycles_count=dep_metrics["circular_cycles_count"],
-            max_afferent_coupling=dep_metrics["max_afferent_coupling"],
-            error_adherence_score=error_metrics["adherence_score"],
-        )
-
-        cmdi, risk_cat, risk_sev, interpretation, estimate_hours = compute_cmdi_summary(
-            normalized_risks=normalized_risks,
-            findings_count=len(all_findings),
-            hotspots_count=len(hotspots),
+            max_complexity=complexity_metrics.get("max_complexity"),
+            duplication_percent=dup_metrics.get("duplication_percent"),
+            circular_cycles_count=dep_metrics.get("circular_cycles_count"),
+            max_afferent_coupling=dep_metrics.get("max_afferent_coupling"),
+            error_adherence_score=error_metrics.get("adherence_score"),
         )
 
         indicators_data = build_indicator_scores(
@@ -361,6 +356,13 @@ class StaticAnalysisEngine:
             duplication_metrics=dup_metrics,
             dependency_metrics=dep_metrics,
             error_metrics=error_metrics,
+        )
+
+        cmdi, risk_cat, risk_sev, interpretation, estimate_hours, breakdown = compute_cmdi_summary(
+            normalized_risks=normalized_risks,
+            findings_count=len(all_findings),
+            hotspots_count=len(hotspots),
+            indicators_data=indicators_data,
         )
 
         # 10. Prioritize Findings (Top 4 for Overview)
@@ -400,20 +402,14 @@ class StaticAnalysisEngine:
             ),
             summary=MaintainabilitySummary(
                 cmdi=cmdi,
+                score_available=breakdown.score_available,
                 risk_category=risk_cat,
                 risk_severity=risk_sev,
                 interpretation=interpretation,
-                scoring_disclaimer=(
-                    "The Composite Maintenance Debt Index (CMDI) is a CodeSentinel AI metric, not an established "
-                    "universal industry standard. Its tiers and weightings are initial product heuristics and have not been "
-                    "scientifically validated."
-                ),
+                scoring_disclaimer=breakdown.scoring_disclaimer,
                 remediation_estimate_hours=estimate_hours,
-                formula_description=(
-                    "CMDI is computed as the normalized weighted average of four indicators: Cyclomatic Complexity (25%), "
-                    "Code Duplication (25%), Architectural Coupling (25%), and Error-Handling Consistency (25%). "
-                    "Each raw measurement is normalized to a 0–100 risk score where higher values denote greater maintainability concern."
-                ),
+                formula_description=breakdown.formula_expression,
+                breakdown=breakdown,
             ),
             indicators=[IndicatorScore(**ind) for ind in indicators_data],
             findings=[FindingModel(**f) for f in sorted_findings],

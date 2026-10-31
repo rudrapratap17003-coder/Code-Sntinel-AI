@@ -102,8 +102,11 @@ export function normalizeAnalysisResult(raw) {
   };
 
   // 2. Normalize Summary
+  const isAvailable = rawSummary.score_available !== false && rawSummary.scoreAvailable !== false && rawSummary.cmdi !== null && rawSummary.risk_category !== 'Not Available' && rawSummary.riskCategory !== 'Not Available';
   const normalizedSummary = {
-    cmdi: typeof rawSummary.cmdi === 'number' ? rawSummary.cmdi : 0,
+    cmdi: (isAvailable && typeof rawSummary.cmdi === 'number') ? rawSummary.cmdi : null,
+    scoreAvailable: isAvailable,
+    score_available: isAvailable,
     riskCategory: rawSummary.risk_category || rawSummary.riskCategory || 'Low Risk',
     risk_category: rawSummary.risk_category || rawSummary.riskCategory || 'Low Risk',
     riskSeverity: rawSummary.risk_severity || rawSummary.riskSeverity || 'info',
@@ -129,6 +132,7 @@ export function normalizeAnalysisResult(raw) {
       rawSummary.formulaDescription ||
       'CMDI is computed as the normalized weighted average of four static indicators: Cyclomatic Complexity, Code Duplication, Architectural Coupling, and Error-Handling Consistency.',
     formula_description: rawSummary.formula_description || rawSummary.formulaDescription,
+    breakdown: rawSummary.breakdown || null,
   };
 
   // 3. Normalize Findings
@@ -170,18 +174,34 @@ export function normalizeAnalysisResult(raw) {
 
   // 4. Normalize Indicators
   const normalizedIndicators = rawIndicators.map((ind) => {
+    const normRisk = typeof ind.normalized_risk === 'number'
+      ? ind.normalized_risk
+      : (typeof ind.normalizedRisk === 'number' ? ind.normalizedRisk : null);
+    const effWeight = typeof ind.effective_weight === 'number'
+      ? ind.effective_weight
+      : (typeof ind.effectiveWeight === 'number' ? ind.effectiveWeight : (ind.weight ?? 0.25));
+    const contrib = typeof ind.contribution === 'number' ? ind.contribution : 0;
+    const contribPct = typeof ind.contribution_percentage === 'number'
+      ? ind.contribution_percentage
+      : (typeof ind.contributionPercentage === 'number' ? ind.contributionPercentage : 0);
+    const rawM = ind.raw_metric || ind.rawMetric || (normRisk === null ? 'Not available' : '');
+
     return {
       id: ind.id,
       name: ind.name,
-      rawMetric: ind.raw_metric || ind.rawMetric || '',
-      raw_metric: ind.raw_metric || ind.rawMetric || '',
+      rawMetric: rawM,
+      raw_metric: rawM,
       rawValues: ind.raw_values || ind.rawValues || {},
       raw_values: ind.raw_values || ind.rawValues || {},
-      normalizedRisk: typeof ind.normalized_risk === 'number' ? ind.normalized_risk : (ind.normalizedRisk || 0),
-      normalized_risk: typeof ind.normalized_risk === 'number' ? ind.normalized_risk : (ind.normalizedRisk || 0),
+      normalizedRisk: normRisk,
+      normalized_risk: normRisk,
       weight: ind.weight ?? 0.25,
-      contribution: ind.contribution ?? 0,
-      classification: ind.classification || 'MEASURED',
+      effectiveWeight: effWeight,
+      effective_weight: effWeight,
+      contribution: contrib,
+      contributionPercentage: contribPct,
+      contribution_percentage: contribPct,
+      classification: ind.classification || (normRisk === null ? 'UNAVAILABLE' : 'MEASURED'),
       severity: ind.severity || 'info',
       interpretation: ind.interpretation || '',
       meaning: ind.meaning || '',
@@ -546,7 +566,7 @@ export const apiClient = {
    * @param {number} [options.timeoutMs=35000]
    * @returns {Promise<Object>} Normalized explanation object with refactoring guidance
    */
-  async explainFinding(finding, { timeoutMs = 35000 } = {}) {
+  async explainFinding(finding, { timeoutMs = 35000, fallback = false } = {}) {
     if (!finding || typeof finding !== 'object') {
       throw new ApiError('Finding data is required to request an AI explanation.', {
         status: 400,
@@ -571,7 +591,7 @@ export const apiClient = {
     };
 
     const raw = await fetchWithTimeout(
-      '/findings/explain',
+      fallback ? '/findings/explain?fallback=true' : '/findings/explain',
       {
         method: 'POST',
         body: JSON.stringify(payload),
@@ -594,6 +614,10 @@ export const apiClient = {
       proposedRemediation: raw.proposed_remediation,
       proposed_remediation: raw.proposed_remediation,
       refactoringExample: raw.refactoring_example,
+      isExampleIllustrative: raw.is_example_illustrative ?? true,
+      is_example_illustrative: raw.is_example_illustrative ?? true,
+      priorityGuidance: raw.priority_guidance || 'Near-Term Refactoring',
+      priority_guidance: raw.priority_guidance || 'Near-Term Refactoring',
       refactoring_example: raw.refactoring_example,
       potentialTradeoffs: raw.potential_tradeoffs,
       potential_tradeoffs: raw.potential_tradeoffs,
@@ -605,8 +629,81 @@ export const apiClient = {
       model_name: raw.model_name,
       generatedAt: raw.generated_at,
       generated_at: raw.generated_at,
-      origin: raw.origin || 'AI_EXPLANATION (Gemini)',
+      origin: raw.origin || (fallback ? 'FALLBACK_RULE_BASED' : 'AI_EXPLANATION (Gemini)'),
     };
+  },
+
+  /**
+   * Phase 12: Retrieves chronological CMDI trends for a specific repository.
+   * @param {string} repositoryUrl
+   * @returns {Promise<Object>} RepositoryTrendsResponse
+   */
+  async getRepositoryTrends(repositoryUrl) {
+    if (!repositoryUrl) {
+      throw new ApiError('Repository URL is required to fetch trends.', { status: 400, code: 'MISSING_URL' });
+    }
+    return fetchWithTimeout(`/analyses/trends?repository_url=${encodeURIComponent(repositoryUrl)}`, { method: 'GET' }, 15000);
+  },
+
+  /**
+   * Phase 12: Compares two historical analyses belonging to the same repository.
+   * @param {string} baseId
+   * @param {string} targetId
+   * @returns {Promise<Object>} ComparisonResponse
+   */
+  async compareAnalyses(baseId, targetId) {
+    if (!baseId || !targetId) {
+      throw new ApiError('Both baseId and targetId are required for comparison.', { status: 400, code: 'MISSING_IDS' });
+    }
+    return fetchWithTimeout(`/analyses/compare?base_id=${encodeURIComponent(baseId)}&target_id=${encodeURIComponent(targetId)}`, { method: 'GET' }, 20000);
+  },
+
+  /**
+   * Phase 12: Retrieves prioritized findings with multi-factor heuristic scoring.
+   * @param {string} analysisId
+   * @returns {Promise<Array<Object>>}
+   */
+  async getPrioritizedFindings(analysisId) {
+    if (!analysisId) {
+      throw new ApiError('Analysis ID is required.', { status: 400, code: 'MISSING_ID' });
+    }
+    return fetchWithTimeout(`/analyses/${encodeURIComponent(analysisId)}/prioritized`, { method: 'GET' }, 15000);
+  },
+
+  /**
+   * Phase 12: Retrieves ranked module-level hotspots.
+   * @param {string} analysisId
+   * @returns {Promise<Array<Object>>}
+   */
+  async getModuleHotspotsRanking(analysisId) {
+    if (!analysisId) {
+      throw new ApiError('Analysis ID is required.', { status: 400, code: 'MISSING_ID' });
+    }
+    return fetchWithTimeout(`/analyses/${encodeURIComponent(analysisId)}/hotspots-ranking`, { method: 'GET' }, 15000);
+  },
+
+  /**
+   * Phase 12: Retrieves AI-assisted maintainability pattern insights.
+   * @param {string} analysisId
+   * @returns {Promise<Array<Object>>}
+   */
+  async getPatternInsights(analysisId) {
+    if (!analysisId) {
+      throw new ApiError('Analysis ID is required.', { status: 400, code: 'MISSING_ID' });
+    }
+    return fetchWithTimeout(`/analyses/${encodeURIComponent(analysisId)}/pattern-insights`, { method: 'GET' }, 15000);
+  },
+
+  /**
+   * Phase 12: Generates an executive developer improvement report.
+   * @param {string} analysisId
+   * @returns {Promise<Object>} DeveloperReportResponse
+   */
+  async getDeveloperReport(analysisId) {
+    if (!analysisId) {
+      throw new ApiError('Analysis ID is required.', { status: 400, code: 'MISSING_ID' });
+    }
+    return fetchWithTimeout(`/analyses/${encodeURIComponent(analysisId)}/report`, { method: 'GET' }, 20000);
   },
 };
 

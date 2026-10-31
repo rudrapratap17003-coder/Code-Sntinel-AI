@@ -40,10 +40,24 @@ export function ArchitecturePage() {
     loadDemoAnalysis,
   } = useAnalysis();
 
-  const architectureData = currentAnalysis?.architecture || DEMO_ARCHITECTURE;
-  const { metrics, nodes = [], edges = [] } = architectureData;
+  const isDemo = Boolean(currentAnalysis?.repository?.isDemo);
+  const architectureData = isDemo
+    ? (currentAnalysis?.architecture || DEMO_ARCHITECTURE)
+    : (currentAnalysis?.architecture || {
+        metrics: {
+          totalModules: 0,
+          totalDependencies: 0,
+          circularCyclesCount: 0,
+          maxAfferentCoupling: { module: 'None', inDegree: 0 },
+          systemModularityScore: '100%',
+        },
+        nodes: [],
+        edges: [],
+      });
 
-  const [selectedModuleId, setSelectedModuleId] = useState(() => nodes[0]?.id || 'mod-pipeline');
+  const { metrics = {}, nodes = [], edges = [] } = architectureData;
+
+  const [selectedModuleId, setSelectedModuleId] = useState(() => nodes[0]?.id || (isDemo ? 'mod-pipeline' : ''));
   const [viewMode, setViewMode] = useState('graph'); // 'graph' | 'list'
 
   // If active selection is invalid for current nodes, reset to first node
@@ -92,15 +106,53 @@ export function ArchitecturePage() {
     );
   }
 
-  const selectedModule = nodes.find((n) => n.id === selectedModuleId) || null;
+  // If real analysis has 0 modules or dependencies
+  if (nodes.length === 0) {
+    return (
+      <div>
+        <PageHeader
+          title="Architecture Explorer"
+          icon={<Network size={24} />}
+          description="Analyze module dependencies, detect architectural cycles, and evaluate structural blast radius."
+          actions={
+            <Badge variant="success">
+              <Cpu size={11} />
+              <span>{currentAnalysis.repository?.name || 'Repository'} (REAL AST)</span>
+            </Badge>
+          }
+        />
 
-  const moduleSelectOptions = [
+        <div style={{ maxWidth: '720px', margin: 'var(--space-2xl) auto' }}>
+          <EmptyState
+            icon={<Network size={36} color="var(--color-accent-primary)" />}
+            title="No Architectural Dependencies Detected"
+            description="The analyzed repository was scanned successfully, but no inter-module import relationships or internal dependency edges were detected among the discovered files."
+            action={
+              <Button
+                to={ROUTES.REPOSITORY}
+                variant="secondary"
+                icon={<Play size={16} />}
+              >
+                Analyze Another Repository
+              </Button>
+            }
+          />
+        </div>
+      </div>
+    );
+  }
+
+  const selectedModule = useMemo(() => {
+    return nodes.find((n) => n.id === selectedModuleId) || null;
+  }, [nodes, selectedModuleId]);
+
+  const moduleSelectOptions = useMemo(() => [
     { value: '', label: 'Select a module to inspect...' },
     ...nodes.map((n) => ({
       value: n.id,
       label: `${n.data?.label || n.id} (${n.data?.category || 'Module'})`,
     })),
-  ];
+  ], [nodes]);
 
   const handleSelectModule = (id) => {
     setSelectedModuleId(id || null);
@@ -110,7 +162,15 @@ export function ArchitecturePage() {
     setSelectedModuleId(nodes[0]?.id || null);
   };
 
-  const isDemo = Boolean(currentAnalysis.repository?.isDemo);
+  const maxAfferentInDegree = typeof metrics.maxAfferentCoupling === 'object'
+    ? (metrics.maxAfferentCoupling?.inDegree ?? 0)
+    : (metrics.maxAfferentCoupling ?? metrics.max_afferent_coupling ?? 0);
+
+  const maxAfferentModuleName = typeof metrics.maxAfferentCoupling === 'object'
+    ? (metrics.maxAfferentCoupling?.module || 'None')
+    : 'Primary Module';
+
+  const circularCycles = metrics.circularCyclesCount ?? metrics.circular_cycles_count ?? 0;
 
   return (
     <div>
@@ -197,42 +257,42 @@ export function ArchitecturePage() {
       >
         <MetricCard
           label="Total Modules"
-          value={metrics.totalModules}
+          value={metrics.totalModules ?? metrics.total_modules ?? nodes.length}
           subvalue="nodes"
-          badgeText="Reference"
-          badgeVariant="demo"
+          badgeText={isDemo ? "Reference" : "Discovered"}
+          badgeVariant={isDemo ? "demo" : "info"}
           description="Source files mapped in module dependency tree."
         />
         <MetricCard
           label="Dependency Edges"
-          value={metrics.totalDependencies}
+          value={metrics.totalDependencies ?? metrics.total_dependencies ?? edges.length}
           subvalue="imports"
-          badgeText="Static"
+          badgeText={isDemo ? "Static" : "AST"}
           badgeVariant="info"
           description="Directed static import references between modules."
         />
         <MetricCard
           label="Circular Dependencies"
-          value={metrics.circularCyclesCount}
+          value={circularCycles}
           subvalue="cycle"
-          badgeText="Critical Defect"
-          badgeVariant="critical"
-          description="Mutual loop: pipeline_orchestrator <-> runner.py."
-          icon={<AlertTriangle size={16} />}
+          badgeText={circularCycles > 0 ? "Critical Defect" : "Clean"}
+          badgeVariant={circularCycles > 0 ? "critical" : "success"}
+          description={circularCycles > 0 ? "Circular import loops require remediation." : "No circular import cycles detected."}
+          icon={circularCycles > 0 ? <AlertTriangle size={16} /> : <CheckCircle2 size={16} />}
         />
         <MetricCard
           label="Max Afferent Coupling"
-          value={metrics.maxAfferentCoupling.inDegree}
+          value={maxAfferentInDegree}
           subvalue="callers"
-          badgeText="God-Object"
-          badgeVariant="medium"
-          description={`Highest in-degree: ${metrics.maxAfferentCoupling.module}`}
+          badgeText="Coupling"
+          badgeVariant={maxAfferentInDegree >= 3 ? "medium" : "success"}
+          description={`Highest in-degree: ${maxAfferentModuleName}`}
           icon={<Share2 size={16} />}
         />
         <MetricCard
           label="Modularity Score"
-          value={metrics.systemModularityScore}
-          badgeText="Healthy"
+          value={metrics.systemModularityScore ?? metrics.system_modularity_score ?? '100%'}
+          badgeText="System"
           badgeVariant="success"
           description="Module boundary cohesion vs coupling ratio."
         />
@@ -312,7 +372,7 @@ export function ArchitecturePage() {
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'minmax(0, 1.8fr) minmax(320px, 1fr)',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
           gap: 'var(--space-lg)',
           marginBottom: 'var(--space-xl)',
           alignItems: 'stretch',

@@ -335,7 +335,10 @@ class SecureRepositoryIngester:
             # 1. Directory symlink & junction inspection (prevent following links outside workspace)
             pruned_dirs = []
             for d in dirs:
-                if d in (".git", ".venv", "venv", "__pycache__", "node_modules") or d.endswith(".egg-info"):
+                if d in (
+                    ".git", ".venv", "venv", "__pycache__", "node_modules",
+                    ".env", ".secrets", ".ssh", ".aws", ".azure", ".gcp", ".kube", ".gnupg", ".credentials",
+                ) or d.endswith(".egg-info"):
                     continue
                 dir_path = Path(root) / d
                 is_link = dir_path.is_symlink() or (hasattr(os.path, "isjunction") and os.path.isjunction(dir_path))

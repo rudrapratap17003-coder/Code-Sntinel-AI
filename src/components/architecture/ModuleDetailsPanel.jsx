@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   ArrowDownRight,
   ArrowUpRight,
+  Share2,
 } from 'lucide-react';
 import { Card, CardHeader, CardBody, Badge, Button } from '../../ui';
 import { ROUTES } from '../../utils/constants';
@@ -67,15 +68,19 @@ export function ModuleDetailsPanel({
     allModules.find((m) => m.id === e.target)
   ).filter(Boolean);
 
+  const isHighCoupling = (data.afferentCoupling >= 3 || data.efferentCoupling >= 4);
+
   return (
     <Card style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <CardHeader
         title={data.label}
         subtitle={data.role}
         actions={
-          <Badge variant={data.inCircularCycle ? 'critical' : 'default'}>
-            {data.category}
-          </Badge>
+          <div style={{ display: 'flex', gap: '4px' }}>
+            <Badge variant={data.inCircularCycle ? 'critical' : isHighCoupling ? 'medium' : 'default'}>
+              {data.category}
+            </Badge>
+          </div>
         }
       />
       <CardBody style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
@@ -134,11 +139,35 @@ export function ModuleDetailsPanel({
           </div>
         )}
 
+        {/* High Coupling Alert */}
+        {isHighCoupling && !data.inCircularCycle && (
+          <div
+            style={{
+              backgroundColor: 'rgba(245, 185, 66, 0.1)',
+              border: '1px solid rgba(245, 185, 66, 0.35)',
+              borderRadius: 'var(--radius-md)',
+              padding: 'var(--space-sm) var(--space-md)',
+              fontSize: 'var(--text-xs)',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 'var(--space-xs)',
+            }}
+          >
+            <Share2 size={15} color="var(--color-severity-medium)" style={{ flexShrink: 0, marginTop: '2px' }} />
+            <div>
+              <strong style={{ color: 'var(--color-severity-medium)' }}>Elevated Structural Coupling:</strong>
+              <p style={{ color: 'var(--color-text-primary)', marginTop: '2px' }}>
+                This module exhibits high connectivity ({data.afferentCoupling} callers, {data.efferentCoupling} dependencies). Changes here carry wider architectural blast radius.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Coupling Metrics Grid */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-xs)', textAlign: 'center' }}>
           <div style={{ background: 'var(--color-surface-elevated)', padding: 'var(--space-xs)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border-subtle)' }}>
             <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>Afferent (Ca)</div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-base)', fontWeight: 'bold', color: data.afferentCoupling >= 4 ? 'var(--color-severity-medium)' : 'var(--color-text-primary)' }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-base)', fontWeight: 'bold', color: data.afferentCoupling >= 3 ? 'var(--color-severity-medium)' : 'var(--color-text-primary)' }}>
               {data.afferentCoupling}
             </div>
             <div style={{ fontSize: '9px', color: 'var(--color-text-muted)' }}>Callers</div>
@@ -146,7 +175,7 @@ export function ModuleDetailsPanel({
 
           <div style={{ background: 'var(--color-surface-elevated)', padding: 'var(--space-xs)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border-subtle)' }}>
             <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>Efferent (Ce)</div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-base)', fontWeight: 'bold', color: 'var(--color-text-primary)' }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-base)', fontWeight: 'bold', color: data.efferentCoupling >= 4 ? 'var(--color-severity-medium)' : 'var(--color-text-primary)' }}>
               {data.efferentCoupling}
             </div>
             <div style={{ fontSize: '9px', color: 'var(--color-text-muted)' }}>Targets</div>

@@ -130,7 +130,7 @@ def analyze_error_handling(files: List[Any]) -> Tuple[List[Dict[str, Any]], Dict
         if not f.content:
             continue
         try:
-            tree = ast.parse(f.content, filename=f.relative_path)
+            tree = f.tree if getattr(f, "tree", None) is not None else ast.parse(f.content, filename=f.relative_path)
             lines = f.content.splitlines()
             visitor = ErrorHandlingVisitor(lines, f.relative_path)
             visitor.visit(tree)

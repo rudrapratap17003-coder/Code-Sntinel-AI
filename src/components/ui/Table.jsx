@@ -62,6 +62,15 @@ export function Table({
             <tr
               key={row.id || rowIndex}
               onClick={() => onRowClick && onRowClick(row)}
+              onKeyDown={(e) => {
+                if (onRowClick && (e.key === 'Enter' || e.key === ' ')) {
+                  e.preventDefault();
+                  onRowClick(row);
+                }
+              }}
+              tabIndex={onRowClick ? 0 : undefined}
+              role={onRowClick ? 'button' : undefined}
+              aria-label={onRowClick ? `Select ${row.title || row.name || row.id || 'row'}` : undefined}
               style={{ cursor: onRowClick ? 'pointer' : 'default' }}
             >
               {columns.map((col) => (

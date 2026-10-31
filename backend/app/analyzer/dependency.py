@@ -105,7 +105,7 @@ def analyze_module_dependencies(files: List[Any]) -> Tuple[Dict[str, Set[str]], 
         if not f.content:
             continue
         try:
-            tree = ast.parse(f.content, filename=f.relative_path)
+            tree = f.tree if getattr(f, "tree", None) is not None else ast.parse(f.content, filename=f.relative_path)
             visitor = ModuleDependencyVisitor(f.relative_path)
             visitor.visit(tree)
 

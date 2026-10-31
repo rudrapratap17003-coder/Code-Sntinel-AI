@@ -46,15 +46,51 @@ class FindingModel(BaseModel):
     remediation_estimate_hours: Optional[int] = Field(2, description="Estimated engineering hours to fix")
 
 
+class IndicatorBreakdown(BaseModel):
+    id: str
+    name: str
+    raw_metric: str
+    raw_values: Dict[str, Any] = Field(default_factory=dict)
+    normalized_risk: Optional[float] = Field(None, ge=0.0, le=100.0)
+    weight: float = Field(0.25, ge=0.0, le=1.0)
+    effective_weight: float = Field(0.25, ge=0.0, le=1.0)
+    contribution: float = Field(0.0, ge=0.0, le=100.0)
+    contribution_percentage: float = Field(0.0, ge=0.0, le=100.0)
+    classification: str = Field("MEASURED", description="MEASURED, HEURISTIC, or UNAVAILABLE")
+    severity: str = "info"
+    interpretation: str
+    meaning: str
+    why_it_matters: str
+    how_calculated: str
+    evidence: str
+    developer_action: str
+    filter_category: str
+
+
+class ScoringBreakdown(BaseModel):
+    cmdi: Optional[float] = Field(None, ge=0.0, le=100.0)
+    score_available: bool = Field(True, description="Whether sufficient metric data was available to calculate CMDI")
+    risk_category: str = Field(..., description="Low Risk, Moderate Risk, High Risk, Critical Risk, or Not Available")
+    risk_severity: str = Field(..., description="success, info, medium, critical, or muted")
+    formula_expression: str
+    is_dynamically_weighted: bool = False
+    indicators: List[IndicatorBreakdown] = Field(default_factory=list)
+    primary_risk_driver: Optional[str] = None
+    interpretation: str
+    scoring_disclaimer: str
+
+
 class IndicatorScore(BaseModel):
     id: str
     name: str
     raw_metric: str
-    raw_values: Dict[str, Any]
-    normalized_risk: float = Field(..., ge=0.0, le=100.0)
+    raw_values: Dict[str, Any] = Field(default_factory=dict)
+    normalized_risk: Optional[float] = Field(None, ge=0.0, le=100.0)
     weight: float = Field(0.25, ge=0.0, le=1.0)
+    effective_weight: float = Field(0.25, ge=0.0, le=1.0)
     contribution: float = Field(..., ge=0.0, le=100.0)
-    classification: str = Field("MEASURED", description="MEASURED or HEURISTIC")
+    contribution_percentage: float = Field(0.0, ge=0.0, le=100.0)
+    classification: str = Field("MEASURED", description="MEASURED, HEURISTIC, or UNAVAILABLE")
     severity: str
     interpretation: str
     meaning: str
@@ -66,13 +102,15 @@ class IndicatorScore(BaseModel):
 
 
 class MaintainabilitySummary(BaseModel):
-    cmdi: float = Field(..., ge=0.0, le=100.0, description="Composite Maintenance Debt Index (0-100)")
-    risk_category: str = Field(..., description="Low Risk, Moderate Risk, High Risk, Critical Risk")
+    cmdi: Optional[float] = Field(None, ge=0.0, le=100.0, description="Composite Maintenance Debt Index (0-100), or None if unavailable")
+    score_available: bool = Field(True, description="Whether sufficient metric data was available to calculate CMDI")
+    risk_category: str = Field(..., description="Low Risk, Moderate Risk, High Risk, Critical Risk, or Not Available")
     risk_severity: str = Field(..., description="success, info, medium, critical")
     interpretation: str
     scoring_disclaimer: str
     remediation_estimate_hours: int
     formula_description: str
+    breakdown: Optional[ScoringBreakdown] = None
 
 
 class ModuleNode(BaseModel):
@@ -150,7 +188,8 @@ class AnalysisListItem(BaseModel):
     display_timestamp: str
     repository_name: str
     repository_url: str
-    cmdi: float
+    cmdi: Optional[float] = None
+    score_available: bool = True
     risk_category: str
     findings_count: int
     files_examined: int
@@ -181,9 +220,198 @@ class FindingExplanationResponse(BaseModel):
     why_it_matters: str = Field(..., description="Why this issue impacts software maintainability")
     proposed_remediation: str = Field(..., description="Actionable step-by-step refactoring approach")
     refactoring_example: Optional[str] = Field(None, description="Suggested refactored code example where context permits")
+    is_example_illustrative: bool = Field(True, description="Explicit flag indicating that the code snippet is an illustrative example, not applied code")
+    priority_guidance: str = Field("Near-Term Refactoring", description="Triage priority guidance based on analyzer severity and blast radius")
     potential_tradeoffs: str = Field(..., description="Nuances, edge cases, and design trade-offs")
     architectural_considerations: str = Field(..., description="Wider architectural context and blast radius")
     context_limitations: Optional[str] = Field(None, description="Honest disclosure if context was insufficient to be fully certain")
     model_name: str
     generated_at: str
     origin: str = "AI_EXPLANATION (Gemini)"
+
+
+# =============================================================================
+# Phase 12: Advanced Technical Debt Intelligence Schemas
+# =============================================================================
+
+class TrendPoint(BaseModel):
+    id: str
+    timestamp: str
+    display_timestamp: str
+    cmdi: Optional[float] = None
+    score_available: bool = True
+    risk_category: str
+    findings_count: int
+    files_examined: int
+    delta_from_previous: Optional[float] = None
+    percentage_change: Optional[float] = None
+    trend_direction: str = "baseline"  # improved, worsened, unchanged, unavailable, baseline
+
+
+class RepositoryTrendsResponse(BaseModel):
+    repository_name: str
+    repository_url: str
+    total_analyses: int
+    earliest_date: Optional[str] = None
+    latest_date: Optional[str] = None
+    analyses: List[TrendPoint] = Field(default_factory=list)
+    overall_trend: str = "insufficient_data"  # improved, worsened, unchanged, unavailable, insufficient_data
+    net_cmdi_delta: Optional[float] = None
+    heuristic_disclaimer: str
+
+
+class IndicatorComparison(BaseModel):
+    id: str
+    name: str
+    earlier_risk: Optional[float] = None
+    later_risk: Optional[float] = None
+    earlier_raw: Optional[str] = None
+    later_raw: Optional[str] = None
+    delta: Optional[float] = None
+    status: str = "unchanged"  # improved, regressed, unchanged, unavailable
+
+
+class FindingDiffItem(BaseModel):
+    id: str
+    title: str
+    rule_id: str
+    file: str
+    line_range: str
+    earlier_severity: Optional[str] = None
+    later_severity: Optional[str] = None
+    category: str
+    evidence_summary: Optional[str] = None
+
+
+class FindingsComparison(BaseModel):
+    newly_detected: List[FindingDiffItem] = Field(default_factory=list)
+    no_longer_detected: List[FindingDiffItem] = Field(default_factory=list)
+    unresolved: List[FindingDiffItem] = Field(default_factory=list)
+    severity_changed: List[FindingDiffItem] = Field(default_factory=list)
+    disclaimer: str
+
+
+class ModuleDiffItem(BaseModel):
+    module_name: str
+    earlier_findings: int = 0
+    later_findings: int = 0
+    earlier_complexity: int = 0
+    later_complexity: int = 0
+    earlier_coupling: int = 0
+    later_coupling: int = 0
+    status: str = "unchanged"  # increased_risk, reduced_risk, unchanged
+
+
+class ModuleComparison(BaseModel):
+    increased_risk_modules: List[ModuleDiffItem] = Field(default_factory=list)
+    reduced_risk_modules: List[ModuleDiffItem] = Field(default_factory=list)
+    newly_detected_hotspots: List[str] = Field(default_factory=list)
+    resolved_hotspots: List[str] = Field(default_factory=list)
+
+
+class ComparisonSummary(BaseModel):
+    what_improved: List[str] = Field(default_factory=list)
+    what_worsened: List[str] = Field(default_factory=list)
+    what_remained_unchanged: List[str] = Field(default_factory=list)
+    recommended_next_actions: List[str] = Field(default_factory=list)
+    scope_change_warning: Optional[str] = None
+
+
+class ComparisonResponse(BaseModel):
+    base_analysis_id: str
+    target_analysis_id: str
+    repository_name: str
+    repository_url: str
+    earlier_timestamp: str
+    later_timestamp: str
+    earlier_commit: Optional[str] = None
+    later_commit: Optional[str] = None
+    earlier_cmdi: Optional[float] = None
+    later_cmdi: Optional[float] = None
+    earlier_category: str
+    later_category: str
+    cmdi_difference: Optional[float] = None
+    cmdi_status: str  # improved, regressed, unchanged, unavailable
+    indicators: List[IndicatorComparison] = Field(default_factory=list)
+    findings: FindingsComparison
+    modules: ModuleComparison
+    summary: ComparisonSummary
+    heuristic_disclaimer: str
+
+
+class RefactoringGuidance(BaseModel):
+    problem_statement: str
+    why_it_matters: str
+    code_evidence: str
+    recommended_change: str
+    expected_benefit: str
+    verification_checklist: List[str] = Field(default_factory=list)
+
+
+class PrioritizedFinding(BaseModel):
+    finding_id: str
+    title: str
+    file: str
+    line_range: str
+    severity: str
+    priority_tier: str  # Critical Attention, High Priority, Medium Priority, Low Priority
+    priority_score: int  # 0 to 100
+    category: str
+    evidence: str
+    why_it_matters: str
+    recommended_next_action: str
+    refactoring_guidance: Optional[RefactoringGuidance] = None
+    heuristic_rationale: str
+
+
+class ModuleHotspotRankItem(BaseModel):
+    module_name: str
+    findings_count: int
+    severity_distribution: Dict[str, int] = Field(default_factory=dict)
+    highest_cyclomatic_complexity: int = 0
+    total_cyclomatic_complexity: int = 0
+    loc: int = 0
+    afferent_coupling: int = 0
+    efferent_coupling: int = 0
+    instability: float = 0.0
+    in_circular_cycle: bool = False
+    duplicate_lines: int = 0
+    error_violations_count: int = 0
+    overall_hotspot_classification: str = "Stable Module"
+    why_it_matters: str
+    associated_finding_ids: List[str] = Field(default_factory=list)
+
+
+class PatternInsightItem(BaseModel):
+    id: str
+    pattern_name: str
+    detected: bool
+    detected_evidence: str
+    affected_files: List[str] = Field(default_factory=list)
+    possible_interpretation: str
+    actionable_recommendation: str
+    non_authorship_caveat: str
+
+
+class DeveloperReportResponse(BaseModel):
+    repository_name: str
+    repository_url: str
+    analysis_date: str
+    display_date: str
+    commit_hash: Optional[str] = None
+    branch: Optional[str] = "main"
+    cmdi: Optional[float] = None
+    score_available: bool = True
+    risk_category: str
+    risk_severity: str
+    indicator_summary: List[IndicatorBreakdown] = Field(default_factory=list)
+    total_findings: int
+    critical_findings_count: int
+    high_findings_count: int
+    prioritized_findings: List[PrioritizedFinding] = Field(default_factory=list)
+    main_hotspots: List[ModuleHotspotRankItem] = Field(default_factory=list)
+    pattern_insights: List[PatternInsightItem] = Field(default_factory=list)
+    historical_trend_summary: Optional[Dict[str, Any]] = None
+    recommended_next_steps: List[str] = Field(default_factory=list)
+    data_provenance_notes: List[str] = Field(default_factory=list)
+

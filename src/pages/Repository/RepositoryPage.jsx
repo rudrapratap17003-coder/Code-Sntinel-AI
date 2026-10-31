@@ -57,9 +57,12 @@ export function RepositoryPage() {
   const [inputUrl, setInputUrl] = useState(submittedRepoUrl || '');
   const [validationError, setValidationError] = useState('');
   const [justAnalyzed, setJustAnalyzed] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmitting || isAnalyzing) return;
+
     setValidationError('');
     clearAnalysisError();
     setJustAnalyzed(false);
@@ -71,11 +74,12 @@ export function RepositoryPage() {
       return;
     }
 
+    setIsSubmitting(true);
     // Keep URL in sync in context
     setSubmittedRepoUrl(validation.normalizedUrl);
 
-    if (analysisMode === 'live') {
-      try {
+    try {
+      if (analysisMode === 'live') {
         await runLiveAnalysis(validation, {
           onSuccess: () => {
             setJustAnalyzed(true);
@@ -84,13 +88,15 @@ export function RepositoryPage() {
             setJustAnalyzed(false);
           },
         });
-      } catch {
-        // Error state handled through analysisError in context
+      } else {
+        runDemoAnalysis(validation, () => {
+          setJustAnalyzed(true);
+        });
       }
-    } else {
-      runDemoAnalysis(validation, () => {
-        setJustAnalyzed(true);
-      });
+    } catch {
+      // Error state handled through analysisError in context
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -356,8 +362,8 @@ export function RepositoryPage() {
                   }}
                   placeholder="https://github.com/owner/repository"
                   icon={<Github size={16} />}
-                  disabled={isAnalyzing}
-                  hint="Example: https://github.com/pallets/flask or https://github.com/psf/requests"
+                  disabled={isAnalyzing || isSubmitting}
+                  hint="Public Python repositories only (e.g. https://github.com/pallets/flask or https://github.com/psf/requests). Private repos and non-GitHub hosts are rejected for security."
                 />
 
                 {validationError && (
@@ -378,6 +384,8 @@ export function RepositoryPage() {
                   <button
                     type="button"
                     onClick={() => handleQuickSample('https://github.com/pallets/flask')}
+                    disabled={isAnalyzing || isSubmitting}
+                    aria-label="Use pallets/flask sample repository"
                     style={{
                       background: 'var(--color-surface-elevated)',
                       border: '1px solid var(--color-border)',
@@ -386,7 +394,7 @@ export function RepositoryPage() {
                       color: 'var(--color-text-muted)',
                       fontSize: 'var(--text-xs)',
                       fontFamily: 'var(--font-mono)',
-                      cursor: 'pointer',
+                      cursor: isAnalyzing ? 'not-allowed' : 'pointer',
                     }}
                   >
                     pallets/flask
@@ -394,6 +402,8 @@ export function RepositoryPage() {
                   <button
                     type="button"
                     onClick={() => handleQuickSample('https://github.com/psf/requests')}
+                    disabled={isAnalyzing || isSubmitting}
+                    aria-label="Use psf/requests sample repository"
                     style={{
                       background: 'var(--color-surface-elevated)',
                       border: '1px solid var(--color-border)',
@@ -402,7 +412,7 @@ export function RepositoryPage() {
                       color: 'var(--color-text-muted)',
                       fontSize: 'var(--text-xs)',
                       fontFamily: 'var(--font-mono)',
-                      cursor: 'pointer',
+                      cursor: isAnalyzing ? 'not-allowed' : 'pointer',
                     }}
                   >
                     psf/requests
@@ -410,6 +420,8 @@ export function RepositoryPage() {
                   <button
                     type="button"
                     onClick={() => handleQuickSample('https://github.com/encode/starlette')}
+                    disabled={isAnalyzing || isSubmitting}
+                    aria-label="Use encode/starlette sample repository"
                     style={{
                       background: 'var(--color-surface-elevated)',
                       border: '1px solid var(--color-border)',
@@ -418,7 +430,7 @@ export function RepositoryPage() {
                       color: 'var(--color-text-muted)',
                       fontSize: 'var(--text-xs)',
                       fontFamily: 'var(--font-mono)',
-                      cursor: 'pointer',
+                      cursor: isAnalyzing ? 'not-allowed' : 'pointer',
                     }}
                   >
                     encode/starlette
@@ -426,6 +438,8 @@ export function RepositoryPage() {
                   <button
                     type="button"
                     onClick={() => handleQuickSample('https://github.com/codesentinel/orchestrator-core')}
+                    disabled={isAnalyzing || isSubmitting}
+                    aria-label="Use codesentinel/orchestrator-core sample repository"
                     style={{
                       background: 'var(--color-surface-elevated)',
                       border: '1px solid var(--color-border)',
@@ -434,7 +448,7 @@ export function RepositoryPage() {
                       color: 'var(--color-text-muted)',
                       fontSize: 'var(--text-xs)',
                       fontFamily: 'var(--font-mono)',
-                      cursor: 'pointer',
+                      cursor: isAnalyzing ? 'not-allowed' : 'pointer',
                     }}
                   >
                     codesentinel/orchestrator-core
@@ -452,6 +466,8 @@ export function RepositoryPage() {
                     padding: 'var(--space-md)',
                     marginTop: 'var(--space-xs)',
                   }}
+                  role="status"
+                  aria-live="polite"
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 'var(--text-xs)', marginBottom: '4px' }}>
                     <span style={{ color: 'var(--color-accent-primary)', fontWeight: 'var(--font-semibold)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
@@ -459,17 +475,20 @@ export function RepositoryPage() {
                       <span>{analysisMode === 'live' ? 'Executing Python Static Analysis Engine' : 'Loading Demonstration Dataset'}</span>
                     </span>
                     <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-text-muted)' }}>
-                      In progress...
+                      {analysisStage ? `Milestone ${analysisStage.step} of 5` : 'In progress...'}
                     </span>
                   </div>
                   <div className="progress-container">
                     <div className="progress-fill-indeterminate" />
                   </div>
-                  <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', margin: 0 }}>
-                    {analysisMode === 'live'
+                  <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-primary)', margin: 0, marginTop: '6px' }}>
+                    {analysisStage?.label || (analysisMode === 'live'
                       ? 'Cloning repository tarball into sandboxed memory, constructing AST, and analyzing complexity...'
-                      : 'Preparing deterministic evaluation metrics and sample maintainability hotspots...'}
+                      : 'Preparing deterministic evaluation metrics and sample maintainability hotspots...')}
                   </p>
+                  <span style={{ fontSize: '10px', color: 'var(--color-text-muted)', display: 'block', marginTop: '4px' }}>
+                    * Progress reflects estimated pipeline milestones while the backend AST engine evaluates code metrics.
+                  </span>
                 </div>
               )}
 
@@ -478,10 +497,10 @@ export function RepositoryPage() {
                 <Button
                   type="submit"
                   variant="primary"
-                  disabled={isAnalyzing}
+                  disabled={isAnalyzing || isSubmitting}
                   icon={isAnalyzing ? undefined : <Play size={15} />}
                 >
-                  {isAnalyzing
+                  {isAnalyzing || isSubmitting
                     ? (analysisMode === 'live' ? 'Analyzing Python AST...' : 'Running Demo Sequence...')
                     : (analysisMode === 'live' ? 'Analyze Repository (Live Engine)' : 'Run Demo Simulation')}
                 </Button>
@@ -489,7 +508,7 @@ export function RepositoryPage() {
                 <Button
                   type="button"
                   variant="secondary"
-                  disabled={isAnalyzing}
+                  disabled={isAnalyzing || isSubmitting}
                   onClick={handleReset}
                   icon={<RotateCcw size={14} />}
                 >
@@ -641,7 +660,14 @@ export function RepositoryPage() {
             >
               <MetricCard
                 title="CMDI Score"
-                value={`${currentAnalysis.summary.cmdi} / 100`}
+                value={
+                  currentAnalysis.summary.scoreAvailable !== false &&
+                  currentAnalysis.summary.score_available !== false &&
+                  currentAnalysis.summary.cmdi !== null &&
+                  currentAnalysis.summary.riskCategory !== 'Not Available'
+                    ? `${typeof currentAnalysis.summary.cmdi === 'number' ? currentAnalysis.summary.cmdi.toFixed(1) : currentAnalysis.summary.cmdi} / 100`
+                    : 'Not Available'
+                }
                 subtitle={currentAnalysis.summary.riskCategory}
                 variant={currentAnalysis.summary.riskSeverity}
               />

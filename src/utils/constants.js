@@ -16,6 +16,10 @@ export const ROUTES = {
   TECHNICAL_DEBT: '/technical-debt',
   FINDINGS: '/findings',
   ARCHITECTURE: '/architecture',
+  TRENDS: '/trends',
+  COMPARE: '/compare',
+  INSIGHTS: '/insights',
+  REPORT: '/report',
   HISTORY: '/history',
   SETTINGS: '/settings',
 };
