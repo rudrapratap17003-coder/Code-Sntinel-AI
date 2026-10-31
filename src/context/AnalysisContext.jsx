@@ -4,6 +4,8 @@ import {
   loadHistoryFromStorage,
   saveHistoryToStorage,
   getInitialSeedHistory,
+  normalizeBackendSummary,
+  mergeHistoryRecords,
 } from '../utils/historyStorage';
 import { apiClient, ApiError } from '../api';
 
@@ -51,13 +53,61 @@ export function AnalysisProvider({ children }) {
   const [backendStatus, setBackendStatus] = useState('checking'); // 'checking' | 'online' | 'offline'
   const [backendMeta, setBackendMeta] = useState(null);
 
+  // History synchronization states
+  const [historyError, setHistoryError] = useState(null);
+  const [isSyncingHistory, setIsSyncingHistory] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
+  const [restoringId, setRestoringId] = useState(null);
+
   const simulationTimerRef = useRef(null);
+  const mountedRef = useRef(true);
+  const isSyncingRef = useRef(false);
 
   // Helper to persist history changes
-  const updateHistory = (newRecords) => {
+  const updateHistory = useCallback((newRecords) => {
     setHistoryData((prev) => ({ ...prev, records: newRecords }));
     saveHistoryToStorage(newRecords);
-  };
+  }, []);
+
+  /**
+   * Synchronizes analysis history from the backend SQLite database when online in live mode.
+   * Merges backend records with local storage without introducing duplicates or dropping local data.
+   */
+  const syncBackendHistory = useCallback(async () => {
+    if (!mountedRef.current) return;
+    if (isSyncingRef.current) return;
+    if (analysisMode !== 'live' || backendStatus !== 'online') return;
+
+    isSyncingRef.current = true;
+    setIsSyncingHistory(true);
+    setHistoryError(null);
+
+    try {
+      const backendSummaries = await apiClient.getAnalyses();
+      if (!mountedRef.current) return;
+
+      if (Array.isArray(backendSummaries)) {
+        setHistoryData((prev) => {
+          const merged = mergeHistoryRecords(prev.records, backendSummaries);
+          saveHistoryToStorage(merged);
+          return { ...prev, records: merged };
+        });
+      }
+    } catch (err) {
+      if (!mountedRef.current) return;
+      const errorMsg =
+        err instanceof ApiError
+          ? err.message
+          : `Failed to synchronize analysis history with database: ${err.message}`;
+      console.warn('[CodeSentinel AI] History sync warning:', errorMsg);
+      setHistoryError(errorMsg);
+    } finally {
+      isSyncingRef.current = false;
+      if (mountedRef.current) {
+        setIsSyncingHistory(false);
+      }
+    }
+  }, [analysisMode, backendStatus]);
 
   /**
    * Probes the Python static analysis engine backend health.
@@ -67,27 +117,46 @@ export function AnalysisProvider({ children }) {
       setBackendStatus('checking');
       const health = await apiClient.checkHealth(4000);
       if (health && health.status === 'healthy') {
-        setBackendStatus('online');
-        setBackendMeta(health);
+        if (mountedRef.current) {
+          setBackendStatus('online');
+          setBackendMeta(health);
+        }
         return true;
       }
-      setBackendStatus('offline');
+      if (mountedRef.current) {
+        setBackendStatus('offline');
+      }
       return false;
     } catch {
-      setBackendStatus('offline');
+      if (mountedRef.current) {
+        setBackendStatus('offline');
+      }
       return false;
     }
+  }, []);
+
+  // Track mounted ref and cleanup timers
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (simulationTimerRef.current) {
+        clearInterval(simulationTimerRef.current);
+      }
+    };
   }, []);
 
   // Probe backend on mount
   useEffect(() => {
     checkBackendStatus();
-    return () => {
-      if (simulationTimerRef.current) {
-        clearInterval(simulationTimerRef.current);
-      }
-    };
   }, [checkBackendStatus]);
+
+  // Synchronize backend history when live mode is active and backend is online
+  useEffect(() => {
+    if (backendStatus === 'online' && analysisMode === 'live') {
+      syncBackendHistory();
+    }
+  }, [backendStatus, analysisMode, syncBackendHistory]);
 
   /**
    * Run real static analysis through the FastAPI backend engine.
@@ -242,38 +311,140 @@ export function AnalysisProvider({ children }) {
 
   /**
    * Restores a previously saved historical analysis into active application state.
+   * If the record is summary-only, retrieves the complete report from the backend.
+   * Handles network and retrieval failures gracefully without setting broken state.
    */
-  const restoreAnalysis = (record) => {
+  const restoreAnalysis = async (record) => {
+    if (!record) return null;
+    setHistoryError(null);
+
+    const needsFullFetch =
+      record.isSummaryOnly ||
+      !Array.isArray(record.findings) ||
+      !record.architecture;
+
+    if (needsFullFetch) {
+      if (backendStatus !== 'online') {
+        const msg = `Backend engine is offline. Cannot retrieve full analysis report for "${record.repository?.name || record.id}".`;
+        setHistoryError(msg);
+        return null;
+      }
+
+      setIsRestoring(true);
+      setRestoringId(record.id);
+
+      try {
+        const fullReport = await apiClient.getAnalysisById(record.id);
+        if (!mountedRef.current) return null;
+
+        // Upgrade this record in history state & localStorage so future restores are instant
+        setHistoryData((prev) => {
+          const updated = prev.records.map((r) => (r.id === record.id ? fullReport : r));
+          saveHistoryToStorage(updated);
+          return { ...prev, records: updated };
+        });
+
+        setCurrentAnalysis(fullReport);
+        if (fullReport?.repository?.url) {
+          setSubmittedRepoUrl(fullReport.repository.url);
+        }
+        return fullReport;
+      } catch (err) {
+        if (!mountedRef.current) return null;
+        const errorMsg =
+          err instanceof ApiError
+            ? err.message
+            : `Failed to retrieve complete report for "${record.repository?.name || record.id}": ${err.message}`;
+        console.error('[CodeSentinel AI] Restore full report error:', err);
+        setHistoryError(errorMsg);
+        return null;
+      } finally {
+        if (mountedRef.current) {
+          setIsRestoring(false);
+          setRestoringId(null);
+        }
+      }
+    }
+
+    // Already a complete analysis report (demo record or locally cached full report)
     setCurrentAnalysis(record);
     if (record?.repository?.url) {
       setSubmittedRepoUrl(record.repository.url);
     }
+    return record;
   };
 
   /**
    * Deletes a single history record.
+   * When in live mode and backend is online, synchronizes deletion with backend SQLite via apiClient.deleteAnalysis(id).
+   * Displays or logs failures without pretending that server deletion succeeded.
    */
-  const deleteHistoryRecord = (id) => {
-    const updated = historyRecords.filter((r) => r.id !== id);
-    updateHistory(updated);
+  const deleteHistoryRecord = async (id) => {
+    if (!id) return false;
+    setHistoryError(null);
 
-    // If the active analysis was deleted, switch to the first available or null
+    const targetRecord = historyRecords.find((r) => r.id === id);
+    const isBackendRecord =
+      targetRecord &&
+      !targetRecord.repository?.isDemo &&
+      !id.startsWith('analysis-seed-');
+
+    if (isBackendRecord && backendStatus === 'online' && analysisMode === 'live') {
+      try {
+        await apiClient.deleteAnalysis(id);
+      } catch (err) {
+        // If the record was already deleted on the server (404), allow local cleanup to proceed
+        if (err?.status !== 404) {
+          const errorMsg =
+            err instanceof ApiError
+              ? err.message
+              : `Failed to delete record ${id} from server: ${err.message}`;
+          console.error('[CodeSentinel AI] Failed to delete analysis from backend:', err);
+          setHistoryError(errorMsg);
+          // Do not silently pretend server deletion succeeded:
+          // Do not remove it locally if server deletion failed!
+          return false;
+        }
+      }
+    }
+
+    // Server deletion succeeded or it was a local demo record: remove locally
+    setHistoryData((prev) => {
+      const updated = prev.records.filter((r) => r.id !== id);
+      saveHistoryToStorage(updated);
+      return { ...prev, records: updated };
+    });
+
+    // If the active analysis was deleted, switch to the first available full analysis, restore, or null
     if (currentAnalysis?.id === id) {
+      const updated = historyRecords.filter((r) => r.id !== id);
       if (updated.length > 0) {
-        setCurrentAnalysis(updated[0]);
-        setSubmittedRepoUrl(updated[0].repository.url);
+        const nextFull = updated.find(
+          (r) => !r.isSummaryOnly && Array.isArray(r.findings) && r.architecture
+        );
+        if (nextFull) {
+          setCurrentAnalysis(nextFull);
+          setSubmittedRepoUrl(nextFull.repository?.url || '');
+        } else {
+          // If the next available record is summary-only, restore it asynchronously
+          restoreAnalysis(updated[0]);
+        }
       } else {
         setCurrentAnalysis(null);
       }
     }
+
+    return true;
   };
 
   /**
-   * Clears all stored history.
+   * Clears stored local history from browser localStorage.
+   * Never deletes backend records as part of bulk localStorage cleanup (Requirement 8).
    */
   const clearAllHistory = () => {
     updateHistory([]);
     setCurrentAnalysis(null);
+    setHistoryError(null);
   };
 
   /**
@@ -334,6 +505,13 @@ export function AnalysisProvider({ children }) {
     clearAnalysis,
     selectFinding,
     clearActiveFinding,
+    // History synchronization additions
+    historyError,
+    clearHistoryError: () => setHistoryError(null),
+    isSyncingHistory,
+    syncBackendHistory,
+    isRestoring,
+    restoringId,
   };
 
   return (

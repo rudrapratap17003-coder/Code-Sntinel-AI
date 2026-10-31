@@ -14,6 +14,11 @@ export const HISTORY_STORAGE_KEY = 'codesentinel_analysis_history_v1';
  * @param {any} record
  * @returns {boolean}
  */
+/**
+ * Validates whether a history record conforms to the required CodeSentinel analysis contract.
+ * @param {any} record
+ * @returns {boolean}
+ */
 export function isValidHistoryRecord(record) {
   if (!record || typeof record !== 'object') return false;
 
@@ -30,11 +35,150 @@ export function isValidHistoryRecord(record) {
   if (!record.summary || typeof record.summary !== 'object') return false;
   if (typeof record.summary.cmdi !== 'number' || isNaN(record.summary.cmdi)) return false;
 
-  // Validate indicators & findings collections
+  // Summary-only backend records are valid without indicators and findings collections
+  if (record.isSummaryOnly) {
+    return true;
+  }
+
+  // Validate indicators & findings collections for full analysis records
   if (!Array.isArray(record.indicators) || record.indicators.length === 0) return false;
   if (!Array.isArray(record.findings)) return false;
 
   return true;
+}
+
+/**
+ * Normalizes a flat backend analysis summary (from GET /api/v1/analyses) into the
+ * nested record contract expected by HistoryPage and AnalysisContext.
+ * Handles both snake_case and camelCase fields without inventing findings,
+ * hotspots, or architecture data.
+ *
+ * @param {Object} item
+ * @returns {Object|null}
+ */
+export function normalizeBackendSummary(item) {
+  if (!item || typeof item !== 'object') return null;
+
+  const id = item.id;
+  if (!id || typeof id !== 'string' || !id.trim()) return null;
+
+  const timestamp = item.timestamp || new Date().toISOString();
+  const displayTimestamp = item.display_timestamp || item.displayTimestamp || 'Timestamp unavailable';
+  const repoName = item.repository_name || item.repositoryName || 'Unknown Repository';
+  const repoUrl = item.repository_url || item.repositoryUrl || '';
+  const cmdi = typeof item.cmdi === 'number' ? item.cmdi : 0;
+  const riskCategory = item.risk_category || item.riskCategory || 'Low Risk';
+  const findingsCount = typeof item.findings_count === 'number' ? item.findings_count : (item.findingsCount || 0);
+  const filesExamined = typeof item.files_examined === 'number' ? item.files_examined : (item.filesExamined || 0);
+  const linesOfCode = typeof item.lines_of_code === 'number' ? item.lines_of_code : (item.linesOfCode || 0);
+  const branch = item.branch || 'main';
+  const commitHash = item.commit_hash || item.commitHash || 'HEAD';
+
+  // Compute standard risk severity token from category or CMDI
+  let riskSeverity = 'info';
+  const catLower = riskCategory.toLowerCase();
+  if (catLower.includes('critical') || cmdi > 75) {
+    riskSeverity = 'critical';
+  } else if (catLower.includes('high') || cmdi > 50) {
+    riskSeverity = 'medium';
+  } else if (catLower.includes('low') || cmdi <= 25) {
+    riskSeverity = 'success';
+  }
+
+  return {
+    id,
+    timestamp,
+    displayTimestamp,
+    display_timestamp: displayTimestamp,
+    repository: {
+      name: repoName,
+      url: repoUrl,
+      branch,
+      commitHash,
+      commit_hash: commitHash,
+      filesExamined,
+      files_examined: filesExamined,
+      findingsCount,
+      findings_count: findingsCount,
+      linesOfCode,
+      lines_of_code: linesOfCode,
+      status: 'Analyzed',
+      isDemo: false,
+      is_demo: false,
+      modeLabel: 'REAL PYTHON STATIC ANALYSIS',
+      mode_label: 'REAL PYTHON STATIC ANALYSIS',
+    },
+    summary: {
+      cmdi,
+      riskCategory,
+      risk_category: riskCategory,
+      riskSeverity,
+      risk_severity: riskSeverity,
+      interpretation: item.interpretation || 'Maintainability assessment computed from Python AST analysis.',
+      scoringDisclaimer: 'The Code Maintainability Debt Index (CMDI) is a CodeSentinel AI metric, not an established universal industry standard.',
+      remediationEstimateHours: item.remediation_estimate_hours || item.remediationEstimateHours || (findingsCount * 3 + 4),
+    },
+    // Explicit indicator that full findings/architecture details require GET /api/v1/analyses/{id}
+    isSummaryOnly: true,
+    is_summary_only: true,
+  };
+}
+
+/**
+ * Merges local storage records with backend analysis summaries without introducing duplicates.
+ * Precedence Rule: If a record with the same ID exists locally with full report details
+ * (!isSummaryOnly and has findings array), the full local report is preserved over the summary-only backend item.
+ *
+ * @param {Array<Object>} localRecords
+ * @param {Array<Object>} backendSummaries
+ * @returns {Array<Object>}
+ */
+export function mergeHistoryRecords(localRecords = [], backendSummaries = []) {
+  const mergedMap = new Map();
+
+  // 1. Index local records
+  if (Array.isArray(localRecords)) {
+    for (const record of localRecords) {
+      if (record && record.id) {
+        mergedMap.set(record.id, record);
+      }
+    }
+  }
+
+  // 2. Merge backend summaries
+  if (Array.isArray(backendSummaries)) {
+    for (const rawItem of backendSummaries) {
+      const normalized = normalizeBackendSummary(rawItem);
+      if (!normalized) continue;
+
+      const existing = mergedMap.get(normalized.id);
+      if (!existing) {
+        // New entry from backend
+        mergedMap.set(normalized.id, normalized);
+      } else {
+        // Precedence: Keep full report if existing is already complete
+        const isExistingFull =
+          !existing.isSummaryOnly &&
+          Array.isArray(existing.findings) &&
+          existing.architecture;
+
+        if (isExistingFull) {
+          mergedMap.set(normalized.id, existing);
+        } else {
+          mergedMap.set(normalized.id, normalized);
+        }
+      }
+    }
+  }
+
+  const result = Array.from(mergedMap.values());
+  result.sort((a, b) => {
+    const timeA = new Date(a.timestamp || a.repository?.lastAnalyzed || 0).getTime();
+    const timeB = new Date(b.timestamp || b.repository?.lastAnalyzed || 0).getTime();
+    return timeB - timeA;
+  });
+
+  return result;
 }
 
 /**
